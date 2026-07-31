@@ -14,6 +14,7 @@ type OrderItem = {
 
 type Order = {
   id: number;
+  order_number: string | null;
   created_at: string;
   order_source: string;
   customer_name: string;
@@ -101,6 +102,7 @@ export default function OrderDetailPage() {
   return (
     <main style={{ maxWidth: 960, margin: '2rem auto', padding: '0 1rem' }}>
       <button className="btn-plain" onClick={() => router.push(`/orders?updated=${Date.now()}`)} style={{ marginBottom: '1rem' }}>← Back to orders</button>
+      <div style={{ fontSize: '0.9rem', color: '#666' }}>{order.order_number ?? `Order #${order.id}`}</div>
       <h1>{order.customer_name}</h1>
       <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap', marginBottom: '0.75rem' }}>
         <span style={{ ...statusBadgeStyle(order.urgency_status), borderRadius: '999px', padding: '0.25rem 0.6rem', fontSize: '0.85rem' }}>{statusLabel(order.urgency_status)}</span>
