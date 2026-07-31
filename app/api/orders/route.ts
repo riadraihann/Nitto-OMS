@@ -1,6 +1,13 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
-import { normalizeUrgencyFields } from '@/lib/urgencyTarget';
+import { normalizeUrgencyFields } from '@/lib/urgencyTarget.mjs';
+import { buildColumnC } from '@/lib/sheetRowParser.mjs';
+import { writeColumnC } from '@/lib/sheetWriteBack';
+
+// normalizeUrgencyFields always resolves urgency_type changes down to these two keys (plus
+// confirmation_status passes through untouched) -- checking for these after normalization is
+// enough to know whether this PATCH touched anything column-C-relevant
+const SHEET_SYNCED_FIELDS = ['confirmation_status', 'urgency_type'];
 
 export async function GET(request: Request) {
   if (!supabaseAdmin) {
@@ -106,7 +113,20 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
     }
 
-    return NextResponse.json({ ok: true, data });
+    let sheetSyncWarning: string | undefined;
+    const touchedSheetSyncedField = Object.keys(normalized.payload).some((key) => SHEET_SYNCED_FIELDS.includes(key));
+
+    // write-back only applies to orders that actually came from the sheet sync -- an order
+    // created manually or via the June CSV import has no matching sheet row to write into
+    if (touchedSheetSyncedField && data.synced_from_sheet_at && data.sheet_row_number) {
+      const columnCValue = buildColumnC(data.urgency_type, data.urgency_target_date, data.confirmation_status);
+      const writeResult = await writeColumnC(data.sheet_row_number, columnCValue);
+      if (!writeResult.ok) {
+        sheetSyncWarning = `Saved, but couldn't write back to the sheet: ${writeResult.error}`;
+      }
+    }
+
+    return NextResponse.json({ ok: true, data, ...(sheetSyncWarning ? { sheetSyncWarning } : {}) });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error';
     return NextResponse.json({ ok: false, error: message }, { status: 500 });

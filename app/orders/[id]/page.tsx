@@ -79,7 +79,7 @@ export default function OrderDetailPage() {
       return;
     }
 
-    setMessage('Saved');
+    setMessage(result.sheetSyncWarning || 'Saved');
   };
 
   const saveUrgency = async (type: string, day?: number) => {
@@ -105,7 +105,7 @@ export default function OrderDetailPage() {
 
     setOrder((prev) => (prev ? { ...prev, urgency_type: result.data.urgency_type, urgency_target_date: result.data.urgency_target_date } : prev));
     setPendingUrgencyType(null);
-    setMessage('Saved');
+    setMessage(result.sheetSyncWarning || 'Saved');
   };
 
   const handleUrgencyTypeChange = async (newType: string) => {

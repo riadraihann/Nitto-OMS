@@ -31,14 +31,42 @@ export default function OrdersList({ orders: initialOrders }: { orders: OrderRow
   const [exportError, setExportError] = useState('');
   const [savingIds, setSavingIds] = useState<Set<number>>(new Set());
   const [rowErrors, setRowErrors] = useState<Record<number, string>>({});
+  const [rowWarnings, setRowWarnings] = useState<Record<number, string>>({});
   // set only while a vu/d type is picked for a row but no day has been committed yet
   const [pendingUrgencyType, setPendingUrgencyType] = useState<Record<number, string>>({});
+  const [syncing, setSyncing] = useState(false);
+  const [syncMessage, setSyncMessage] = useState('');
+  const [syncError, setSyncError] = useState('');
+
+  const syncNow = async () => {
+    setSyncing(true);
+    setSyncMessage('');
+    setSyncError('');
+
+    try {
+      const response = await fetch('/api/sync/sheet/trigger', { method: 'POST' });
+      const result = await response.json();
+
+      if (!response.ok || !result.ok) {
+        setSyncError(result.error || 'Sync failed');
+        return;
+      }
+
+      const s = result.summary;
+      setSyncMessage(`Synced: ${s.created} created, ${s.updated} updated, ${s.removed} removed, ${s.skipped} skipped, ${s.warnings} warnings, ${s.errors} errors`);
+    } catch {
+      setSyncError('Sync failed');
+    } finally {
+      setSyncing(false);
+    }
+  };
 
   const updateField = async (orderId: number, field: 'confirmation_status' | 'delivery_status', value: string) => {
     const previous = orders.find((o) => o.id === orderId)?.[field];
     setOrders((prev) => prev.map((o) => (o.id === orderId ? { ...o, [field]: value } : o)));
     setSavingIds((prev) => new Set(prev).add(orderId));
     setRowErrors((prev) => { const next = { ...prev }; delete next[orderId]; return next; });
+    setRowWarnings((prev) => { const next = { ...prev }; delete next[orderId]; return next; });
 
     try {
       const response = await fetch(`/api/orders?id=${orderId}`, {
@@ -51,6 +79,8 @@ export default function OrdersList({ orders: initialOrders }: { orders: OrderRow
       if (!response.ok) {
         setOrders((prev) => prev.map((o) => (o.id === orderId ? { ...o, [field]: previous ?? o[field] } : o)));
         setRowErrors((prev) => ({ ...prev, [orderId]: result.error || 'Unable to save' }));
+      } else if (result.sheetSyncWarning) {
+        setRowWarnings((prev) => ({ ...prev, [orderId]: result.sheetSyncWarning }));
       }
     } catch {
       setOrders((prev) => prev.map((o) => (o.id === orderId ? { ...o, [field]: previous ?? o[field] } : o)));
@@ -63,6 +93,7 @@ export default function OrdersList({ orders: initialOrders }: { orders: OrderRow
   const saveUrgency = async (orderId: number, type: string, day?: number) => {
     setSavingIds((prev) => new Set(prev).add(orderId));
     setRowErrors((prev) => { const next = { ...prev }; delete next[orderId]; return next; });
+    setRowWarnings((prev) => { const next = { ...prev }; delete next[orderId]; return next; });
 
     try {
       const body: Record<string, unknown> = { id: orderId, urgency_type: type };
@@ -78,6 +109,10 @@ export default function OrdersList({ orders: initialOrders }: { orders: OrderRow
       if (!response.ok) {
         setRowErrors((prev) => ({ ...prev, [orderId]: result.error || 'Unable to save' }));
         return;
+      }
+
+      if (result.sheetSyncWarning) {
+        setRowWarnings((prev) => ({ ...prev, [orderId]: result.sheetSyncWarning }));
       }
 
       setOrders((prev) => prev.map((o) => (o.id === orderId ? { ...o, urgency_type: result.data.urgency_type, urgency_target_date: result.data.urgency_target_date } : o)));
@@ -176,6 +211,11 @@ export default function OrdersList({ orders: initialOrders }: { orders: OrderRow
           {exporting ? 'Exporting...' : 'Export Selected'}
         </button>
         {exportError ? <span style={{ color: '#c62828', fontSize: '0.9rem' }}>{exportError}</span> : null}
+        <button type="button" onClick={syncNow} disabled={syncing} style={{ marginLeft: 'auto' }}>
+          {syncing ? 'Syncing...' : 'Sync Now'}
+        </button>
+        {syncMessage ? <span style={{ color: '#2e7d32', fontSize: '0.85rem' }}>{syncMessage}</span> : null}
+        {syncError ? <span style={{ color: '#c62828', fontSize: '0.9rem' }}>{syncError}</span> : null}
       </div>
 
       <div style={{ display: 'grid', gap: '0.75rem' }}>
@@ -269,6 +309,7 @@ export default function OrdersList({ orders: initialOrders }: { orders: OrderRow
                   </label>
                   {savingIds.has(order.id) ? <span style={{ fontSize: '0.8rem', color: '#666' }}>Saving...</span> : null}
                   {rowErrors[order.id] ? <span style={{ fontSize: '0.8rem', color: '#c62828' }}>{rowErrors[order.id]}</span> : null}
+                  {rowWarnings[order.id] ? <span style={{ fontSize: '0.8rem', color: '#ef6c00' }}>{rowWarnings[order.id]}</span> : null}
                 </div>
 
                 <div style={{ marginTop: '0.75rem' }}>

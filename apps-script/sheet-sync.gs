@@ -1,6 +1,13 @@
 // Nitto OMS sheet sync -- paste this into a bound Apps Script project on the order-tracking
-// spreadsheet (Extensions > Apps Script). One-way, Sheet -> App only. Targets a specific tab
-// by gid (see SHEET_GID below), not by name -- this spreadsheet has ~50 similarly-named tabs.
+// spreadsheet (Extensions > Apps Script). Targets a specific tab by gid (see SHEET_GID below),
+// not by name -- this spreadsheet has ~50 similarly-named tabs.
+//
+// Sheet -> App direction only; this script never writes anything. App -> Sheet write-back
+// (column C, when a moderator changes confirmation/urgency in the app) happens server-side via
+// the service account, not through this script -- but note that a write-back IS itself an edit
+// to the sheet, so it WILL fire onEditInstallable below and re-sync. That's expected and
+// harmless: the app's own loop-prevention logic recognizes its own echoed-back value as
+// already-applied and skips reprocessing it.
 //
 // Setup (do this once):
 //   1. Extensions > Apps Script, paste this whole file in as Code.gs (replacing the default).

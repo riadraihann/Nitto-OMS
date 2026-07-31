@@ -1,18 +1,12 @@
 import { NextResponse } from 'next/server';
-import { JWT } from 'google-auth-library';
-import { reconcileSheetRows } from '@/lib/reconcileSheetRows';
-
-const SHEET_ID = '1onvRBeDzZ63vwSCONjA2bpD7X10Npd94KuicJxQpRo4';
-// gid from the sheet URL the "Real Todays" tab was shared as (...#gid=1828206401) -- matching
-// by this numeric id is unambiguous, unlike matching by title (the actual tab title on this
-// spreadsheet turned out not to literally be "Real Todays")
-const SHEET_GID = 1828206401;
+import { pullAndReconcileSheet } from '@/lib/pullAndReconcileSheet';
 
 // Independent backstop for the push-based webhook (app/api/sync/sheet/route.ts): hit on a
-// schedule (Vercel Cron, or an external scheduler) by whoever calls this route. Pulls the
-// sheet directly via the Sheets API using a service account, rather than relying on the Apps
-// Script trigger having fired -- covers the case where the trigger itself silently fails or
-// gets deleted, not just an occasional missed edit.
+// schedule (external scheduler) by whoever calls this route. Pulls the sheet directly via the
+// Sheets API using a service account, rather than relying on the Apps Script trigger having
+// fired -- covers the case where the trigger itself silently fails or gets deleted, not just
+// an occasional missed edit. Secret-protected since this is a public URL hit by an external
+// scheduler; contrast with the "Sync Now" button's trigger route, which is same-origin only.
 export async function GET(request: Request) {
   const env = process.env as unknown as Record<string, string | undefined>;
   const secret = env.SHEET_SYNC_SECRET;
@@ -23,64 +17,6 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: false, error: 'Unauthorized' }, { status: 401 });
   }
 
-  const keyJson = env.GOOGLE_SERVICE_ACCOUNT_JSON;
-  if (!keyJson) {
-    return NextResponse.json({ ok: false, error: 'GOOGLE_SERVICE_ACCOUNT_JSON is not configured on the server' }, { status: 500 });
-  }
-
-  let credentials: { client_email?: string; private_key?: string };
-  try {
-    credentials = JSON.parse(keyJson);
-  } catch {
-    return NextResponse.json({ ok: false, error: 'GOOGLE_SERVICE_ACCOUNT_JSON is not valid JSON' }, { status: 500 });
-  }
-
-  if (!credentials.client_email || !credentials.private_key) {
-    return NextResponse.json({ ok: false, error: 'GOOGLE_SERVICE_ACCOUNT_JSON is missing client_email/private_key' }, { status: 500 });
-  }
-
-  const auth = new JWT({
-    email: credentials.client_email,
-    key: credentials.private_key,
-    scopes: ['https://www.googleapis.com/auth/spreadsheets.readonly'],
-  });
-
-  // Google's "Unable to parse range" error fires both for genuinely malformed A1 syntax and
-  // for a sheet name that doesn't exist -- so instead of hardcoding a tab title into the
-  // range, resolve the tab by its numeric gid (unambiguous, unlike title) first.
-  let actualTitle: string;
-  try {
-    const metaUrl = `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}?fields=sheets.properties`;
-    const metaResponse = await auth.request<{ sheets?: { properties?: { title?: string; sheetId?: number } }[] }>({ url: metaUrl });
-    const sheets = metaResponse.data.sheets ?? [];
-    const match = sheets.find((s) => s.properties?.sheetId === SHEET_GID);
-    if (!match?.properties?.title) {
-      const known = sheets.map((s) => `${s.properties?.title} (gid=${s.properties?.sheetId})`).join(', ');
-      return NextResponse.json(
-        { ok: false, error: `No tab with gid=${SHEET_GID} found. Known tabs: ${known || '(none readable)'}` },
-        { status: 502 }
-      );
-    }
-    actualTitle = match.properties.title;
-  } catch (error) {
-    const message = error instanceof Error ? error.message : 'Unknown error';
-    return NextResponse.json({ ok: false, error: `Sheets API metadata request failed: ${message}` }, { status: 502 });
-  }
-
-  // UNFORMATTED_VALUE: numbers come back as JS numbers (not "1,200" display strings) and
-  // plain-text dates come back untouched -- both are what parseSheetRow expects
-  const range = encodeURIComponent(`'${actualTitle}'!A:ZZ`);
-  const url = `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/${range}?valueRenderOption=UNFORMATTED_VALUE`;
-
-  let values: unknown[][] = [];
-  try {
-    const response = await auth.request<{ values?: unknown[][] }>({ url });
-    values = response.data.values ?? [];
-  } catch (error) {
-    const message = error instanceof Error ? error.message : 'Unknown error';
-    return NextResponse.json({ ok: false, error: `Sheets API request failed: ${message}` }, { status: 502 });
-  }
-
-  const result = await reconcileSheetRows(values);
+  const result = await pullAndReconcileSheet();
   return NextResponse.json(result, { status: result.status });
 }
