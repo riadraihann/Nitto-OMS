@@ -1,7 +1,7 @@
 "use client";
 
 import Link from 'next/link';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { statusBadgeStyle, statusLabel, confirmationSteps, deliveryOptions, urgencyTypeOptions, urgencyTypeOptionLabel, urgencyLabel, telHref, CALL_PENDING_STAGES } from '@/lib/theme';
 
 type OrderItem = {
@@ -28,6 +28,14 @@ type OrderRow = {
 
 export default function OrdersList({ orders: initialOrders, view }: { orders: OrderRow[]; view: string }) {
   const [orders, setOrders] = useState(initialOrders);
+
+  // Switching views (e.g. Call Pending -> All) via the nav pills is a client-side
+  // navigation on the same route, so this component isn't remounted -- without this,
+  // useState(initialOrders) would keep showing whatever filtered list was left over
+  // from the previous view instead of the newly fetched orders for the new one.
+  useEffect(() => {
+    setOrders(initialOrders);
+  }, [initialOrders]);
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [exporting, setExporting] = useState(false);
   const [exportError, setExportError] = useState('');
