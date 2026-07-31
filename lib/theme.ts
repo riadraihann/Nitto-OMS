@@ -68,6 +68,12 @@ export const confirmationSteps = ['pending', 'x1', 'x2', 'x3', 'confirmed_m', 'c
 export const deliveryOptions = ['packaging', 'sent_to_courier', 'delivered', 'returned'];
 export const urgencyTypeOptions = ['normal', 'urgent', 'hold', 'vu', 'd'];
 
+// "Call Pending" view (/orders?view=call-pending): shopify orders still needing a call.
+// Shared between the server-side filter query and the client list, which uses it to drop a
+// row out of view the instant it's marked confirmed/cancelled via the inline editor -- without
+// this shared source of truth the two could silently drift apart.
+export const CALL_PENDING_STAGES = ['pending', 'x1', 'x2', 'x3'];
+
 const urgencyTypeLabels: Record<string, string> = {
   vu: 'VU (Very Urgent)',
   d: 'D (Dispatch)',

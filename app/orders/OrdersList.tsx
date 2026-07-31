@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useState } from 'react';
-import { statusBadgeStyle, statusLabel, confirmationSteps, deliveryOptions, urgencyTypeOptions, urgencyTypeOptionLabel, urgencyLabel, telHref } from '@/lib/theme';
+import { statusBadgeStyle, statusLabel, confirmationSteps, deliveryOptions, urgencyTypeOptions, urgencyTypeOptionLabel, urgencyLabel, telHref, CALL_PENDING_STAGES } from '@/lib/theme';
 
 type OrderItem = {
   sku: string;
@@ -26,7 +26,7 @@ type OrderRow = {
   order_items: OrderItem[];
 };
 
-export default function OrdersList({ orders: initialOrders }: { orders: OrderRow[] }) {
+export default function OrdersList({ orders: initialOrders, view }: { orders: OrderRow[]; view: string }) {
   const [orders, setOrders] = useState(initialOrders);
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [exporting, setExporting] = useState(false);
@@ -81,8 +81,17 @@ export default function OrdersList({ orders: initialOrders }: { orders: OrderRow
       if (!response.ok) {
         setOrders((prev) => prev.map((o) => (o.id === orderId ? { ...o, [field]: previous ?? o[field] } : o)));
         setRowErrors((prev) => ({ ...prev, [orderId]: result.error || 'Unable to save' }));
-      } else if (result.sheetSyncWarning) {
-        setRowWarnings((prev) => ({ ...prev, [orderId]: result.sheetSyncWarning }));
+      } else {
+        if (result.sheetSyncWarning) {
+          setRowWarnings((prev) => ({ ...prev, [orderId]: result.sheetSyncWarning }));
+        }
+        // Call Pending only ever shows pending/x1/x2/x3 -- once a row is marked confirmed or
+        // cancelled it no longer belongs here, so drop it from view immediately rather than
+        // leaving it visible (with an updated badge) until the next full page load
+        if (field === 'confirmation_status' && view === 'call-pending' && !CALL_PENDING_STAGES.includes(value)) {
+          setOrders((prev) => prev.filter((o) => o.id !== orderId));
+          setSelected((prev) => { const next = new Set(prev); next.delete(orderId); return next; });
+        }
       }
     } catch {
       setOrders((prev) => prev.map((o) => (o.id === orderId ? { ...o, [field]: previous ?? o[field] } : o)));

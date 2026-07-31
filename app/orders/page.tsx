@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { supabaseAdmin } from '@/lib/supabase';
+import { CALL_PENDING_STAGES } from '@/lib/theme';
 import OrdersList from './OrdersList';
 
 export const dynamic = 'force-dynamic';
@@ -57,8 +58,6 @@ export default async function OrdersPage({ searchParams }: OrdersPageProps) {
   const sort = getParam(searchParams?.sort) || 'date';
   const dateFrom = getParam(searchParams?.date_from);
   const dateTo = getParam(searchParams?.date_to);
-
-  const CALL_PENDING_STAGES = ['pending', 'x1', 'x2', 'x3'];
 
   let query = supabaseAdmin
     .from('orders')
@@ -211,7 +210,7 @@ export default async function OrdersPage({ searchParams }: OrdersPageProps) {
         </div>
       ) : null}
 
-      <OrdersList orders={orders} />
+      <OrdersList orders={orders} view={view} />
     </main>
   );
 }
