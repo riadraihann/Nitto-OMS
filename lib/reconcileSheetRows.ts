@@ -266,12 +266,16 @@ export async function reconcileSheetRows(rows: unknown[]): Promise<ReconcileResu
           continue;
         }
 
-        const { error: insertItemsError } = await supabaseAdmin
-          .from('order_items')
-          .insert(items.map((item) => ({ order_id: existing.id, ...item })));
-        if (insertItemsError) {
-          errors.push({ order_number: orderNumber, error: insertItemsError.message });
-          continue;
+        // a sheet row can now legitimately have zero items (flagged via needs_review rather
+        // than dropped) -- skip the insert call entirely rather than call .insert([])
+        if (items.length > 0) {
+          const { error: insertItemsError } = await supabaseAdmin
+            .from('order_items')
+            .insert(items.map((item) => ({ order_id: existing.id, ...item })));
+          if (insertItemsError) {
+            errors.push({ order_number: orderNumber, error: insertItemsError.message });
+            continue;
+          }
         }
 
         if (oldItemsSummary !== newItemsSummary) {
@@ -307,12 +311,14 @@ export async function reconcileSheetRows(rows: unknown[]): Promise<ReconcileResu
         continue;
       }
 
-      const { error: insertItemsError } = await supabaseAdmin
-        .from('order_items')
-        .insert(items.map((item) => ({ order_id: newOrder.id, ...item })));
-      if (insertItemsError) {
-        errors.push({ order_number: orderNumber, error: insertItemsError.message });
-        continue;
+      if (items.length > 0) {
+        const { error: insertItemsError } = await supabaseAdmin
+          .from('order_items')
+          .insert(items.map((item) => ({ order_id: newOrder.id, ...item })));
+        if (insertItemsError) {
+          errors.push({ order_number: orderNumber, error: insertItemsError.message });
+          continue;
+        }
       }
 
       historyEntries.push({ order_id: newOrder.id, field: 'order_created', old_value: null, new_value: `Created via sheet sync (order_number ${orderNumber})`, source: 'sheet_sync' });
