@@ -9,17 +9,26 @@
      pairs with --navy text, which reads at ~4.8:1. */
   --orchid-text: #a83aa3;
   --orchid-tint: #fbeafa;
-  --bg-page: #f5f6fa;
+  --bg-page: #f7f7fa;
   --bg-banner: #ffffff;
-  --text: #16213e;
+  --text: #1a1a2e;
   --text-muted: #666;
-  --border: #e0e2e8;
+  --border: #e8e8f0;
+
+  /* the one deliberately distinctive touch (see SiteHeader) -- sampled from the logo's
+     feather, blue through green through gold */
+  --gradient-blue: #2fa8d5;
+  --gradient-green: #5cb33c;
+  --gradient-gold: #d3ae5c;
+
+  --font-body: var(--font-inter), system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-display: var(--font-display-font, var(--font-body));
 }
 
 html, body {
   margin: 0;
   padding: 0;
-  font-family: Arial, sans-serif;
+  font-family: var(--font-body);
   background: var(--bg-page);
   color: var(--text);
 }
@@ -28,6 +37,12 @@ html, body {
 
 h1, h2, h3 {
   color: var(--navy);
+}
+
+/* "page title" is h1 specifically -- table cells, form labels, and section headings (h2/h3)
+   stay in the body font, where legibility and render speed matter more than distinctiveness */
+h1 {
+  font-family: var(--font-display);
 }
 
 a {
@@ -102,11 +117,12 @@ label {
   display: inline-block;
   padding: 0.35rem 0.7rem;
   border-radius: 999px;
-  border: 1px solid var(--navy);
+  border: 1px solid var(--border);
   text-decoration: none;
-  color: var(--navy);
+  color: var(--text);
   background: #fff;
   font-size: 0.9rem;
+  transition: background-color 120ms ease, border-color 120ms ease;
 }
 
 .nav-pill:hover {
@@ -118,4 +134,31 @@ label {
   border-color: var(--orchid);
   color: var(--navy);
   font-weight: 600;
+}
+
+/* order row cards on /orders -- background-color transition only on hover (no shadow, no
+   transform) so it stays cheap to paint even with hundreds of rows on screen */
+.order-row {
+  background-color: #fff;
+  transition: background-color 120ms ease;
+}
+
+.order-row:hover {
+  background-color: #f3f1fa;
+}
+
+.order-row--urgent {
+  background-color: #ffe6e6;
+}
+
+.order-row--urgent:hover {
+  background-color: #ffd9d9;
+}
+
+.order-row--hold {
+  background-color: #fff7d6;
+}
+
+.order-row--hold:hover {
+  background-color: #ffefb8;
 }

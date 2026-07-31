@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { statusBadgeStyle, statusLabel, confirmationSteps, deliveryOptions, urgencyTypeOptions, urgencyTypeOptionLabel, urgencyLabel } from '@/lib/theme';
+import { statusBadgeStyle, statusLabel, confirmationSteps, deliveryOptions, urgencyTypeOptions, urgencyTypeOptionLabel, urgencyLabel, telHref } from '@/lib/theme';
 
 type OrderItem = {
   id?: number;
@@ -159,7 +159,7 @@ export default function OrderDetailPage() {
         <span style={{ ...statusBadgeStyle(order.delivery_status), borderRadius: '999px', padding: '0.25rem 0.6rem', fontSize: '0.85rem' }}>{statusLabel(order.delivery_status)}</span>
       </div>
       <p>Created: {new Date(order.created_at).toLocaleString()}</p>
-      <p>Phone: {order.phone}</p>
+      <p>Phone: <a href={telHref(order.phone)}>{order.phone}</a></p>
       <p>Address: {order.address}</p>
 
       <div style={{ border: '1px solid #ddd', borderRadius: '12px', padding: '1rem', marginTop: '1rem' }}>

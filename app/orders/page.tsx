@@ -16,6 +16,8 @@ type OrderRow = {
   id: number;
   order_number: string | null;
   customer_name: string;
+  phone: string;
+  address: string;
   urgency_type: string;
   urgency_target_date: string | null;
   confirmation_status: string;
@@ -60,7 +62,7 @@ export default async function OrdersPage({ searchParams }: OrdersPageProps) {
 
   let query = supabaseAdmin
     .from('orders')
-    .select('id, order_number, customer_name, urgency_type, urgency_target_date, confirmation_status, delivery_status, created_at, total_amount, order_items(sku, product_name, quantity, unit_price)')
+    .select('id, order_number, customer_name, phone, address, urgency_type, urgency_target_date, confirmation_status, delivery_status, created_at, total_amount, order_items(sku, product_name, quantity, unit_price)')
     .order('created_at', { ascending: false });
 
   if (view === 'ready-for-delivery') {

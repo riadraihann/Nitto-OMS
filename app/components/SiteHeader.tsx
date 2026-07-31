@@ -13,12 +13,7 @@ export default function SiteHeader() {
   const pathname = usePathname();
 
   return (
-    <header
-      style={{
-        background: '#ffffff',
-        borderBottom: '3px solid #0a2472',
-      }}
-    >
+    <header style={{ background: '#ffffff' }}>
       <div
         style={{
           maxWidth: 1100,
@@ -50,6 +45,8 @@ export default function SiteHeader() {
           })}
         </nav>
       </div>
+      {/* the one deliberately distinctive touch -- everything else stays quiet around it */}
+      <div style={{ height: '3px', background: 'linear-gradient(90deg, var(--gradient-blue), var(--gradient-green), var(--gradient-gold))' }} />
     </header>
   );
 }

@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useState } from 'react';
-import { statusBadgeStyle, statusLabel, confirmationSteps, deliveryOptions, urgencyTypeOptions, urgencyTypeOptionLabel, urgencyLabel } from '@/lib/theme';
+import { statusBadgeStyle, statusLabel, confirmationSteps, deliveryOptions, urgencyTypeOptions, urgencyTypeOptionLabel, urgencyLabel, telHref } from '@/lib/theme';
 
 type OrderItem = {
   sku: string;
@@ -15,6 +15,8 @@ type OrderRow = {
   id: number;
   order_number: string | null;
   customer_name: string;
+  phone: string;
+  address: string;
   urgency_type: string;
   urgency_target_date: string | null;
   confirmation_status: string;
@@ -223,15 +225,15 @@ export default function OrdersList({ orders: initialOrders }: { orders: OrderRow
           const itemSummary = (order.order_items ?? []).map((item) => `${item.quantity} × ${item.sku || item.product_name}`).join(', ');
           const computedSubtotal = (order.order_items ?? []).reduce((sum, item) => sum + item.quantity * item.unit_price, 0);
           const subtotal = order.total_amount ?? computedSubtotal;
-          const rowStyle = order.urgency_type === 'urgent' || order.urgency_type === 'vu'
-            ? { backgroundColor: '#ffe6e6' }
+          const rowClassName = order.urgency_type === 'urgent' || order.urgency_type === 'vu'
+            ? 'order-row order-row--urgent'
             : order.urgency_type === 'hold'
-              ? { backgroundColor: '#fff7d6' }
-              : { backgroundColor: '#fff' };
+              ? 'order-row order-row--hold'
+              : 'order-row';
           const displayedUrgencyType = pendingUrgencyType[order.id] ?? order.urgency_type;
 
           return (
-            <article key={order.id} style={{ ...rowStyle, border: '1px solid #e5e7eb', borderRadius: '12px', padding: '1rem', display: 'flex', gap: '0.75rem' }}>
+            <article key={order.id} className={rowClassName} style={{ border: '1px solid var(--border)', borderRadius: '12px', padding: '1.1rem 1.25rem', display: 'flex', gap: '0.75rem' }}>
               <input
                 type="checkbox"
                 checked={selected.has(order.id)}
@@ -243,7 +245,11 @@ export default function OrdersList({ orders: initialOrders }: { orders: OrderRow
                   <div>
                     <div style={{ fontSize: '0.9rem', color: '#666' }}>{order.order_number ?? `Order #${order.id}`}</div>
                     <div style={{ fontSize: '1.05rem', fontWeight: 700 }}>{order.customer_name}</div>
-                    <div style={{ color: '#666', marginTop: '0.2rem' }}>{new Date(order.created_at).toLocaleString()}</div>
+                    <div style={{ marginTop: '0.3rem', fontSize: '0.9rem' }}>
+                      <a href={telHref(order.phone)} style={{ fontWeight: 600 }}>{order.phone}</a>
+                    </div>
+                    <div style={{ color: '#666', marginTop: '0.15rem', fontSize: '0.9rem', maxWidth: '32rem', wordBreak: 'break-word' }}>{order.address}</div>
+                    <div style={{ color: '#666', marginTop: '0.3rem' }}>{new Date(order.created_at).toLocaleString()}</div>
                   </div>
                   <div style={{ textAlign: 'right' }}>
                     <div style={{ fontWeight: 700 }}>Total: ৳{subtotal.toFixed(2)}</div>

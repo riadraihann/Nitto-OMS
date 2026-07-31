@@ -88,3 +88,13 @@ export function urgencyLabel(type: string, targetDate: string | null): string {
   }
   return statusLabel(type);
 }
+
+// Phone numbers in this dataset are entered inconsistently (with/without leading 0, with/
+// without the 880 country code), so normalize to E.164 for the tel: href while still
+// displaying the raw stored text -- staff should see exactly what's on file.
+export function telHref(phone: string): string {
+  const digits = phone.replace(/[^\d]/g, '');
+  if (digits.startsWith('880')) return `tel:+${digits}`;
+  if (digits.startsWith('0')) return `tel:+880${digits.slice(1)}`;
+  return `tel:+880${digits}`;
+}
