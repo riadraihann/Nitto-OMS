@@ -2,8 +2,9 @@
 
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { statusBadgeStyle, statusLabel, confirmationSteps, deliveryOptions, urgencyTypeOptions, urgencyTypeOptionLabel, urgencyLabel, telHref } from '@/lib/theme';
+import { statusBadgeStyle, statusLabel, confirmationStatusOptions, deliveryOptions, urgencyTypeOptions, urgencyTypeOptionLabel, urgencyLabel, telHref } from '@/lib/theme';
 import { NEEDS_REVIEW_REASON_LABELS } from '@/lib/orderValidation.mjs';
+import { ATTEMPT_TYPES, ATTEMPT_MAX, ATTEMPT_TYPE_LABELS, isTerminalConfirmationStatus, formatAttemptsForDisplay } from '@/lib/contactAttempts.mjs';
 
 type OrderItem = {
   id?: number;
@@ -11,6 +12,12 @@ type OrderItem = {
   product_name: string;
   quantity: number;
   unit_price: number;
+};
+
+type ContactAttempt = {
+  type: string;
+  count: number;
+  first_logged_at: string | null;
 };
 
 type HistoryEntry = {
@@ -44,6 +51,7 @@ type Order = {
   needs_review: boolean;
   needs_review_reasons: string[] | null;
   order_items?: OrderItem[];
+  contact_attempts?: ContactAttempt[];
 };
 
 export default function OrderDetailPage() {
@@ -91,7 +99,10 @@ export default function OrderDetailPage() {
   const updateField = async (field: keyof Order, value: string | number | null) => {
     if (!order) return;
 
-    const nextOrder = { ...order, [field]: value };
+    // moving to a terminal confirmation status wipes contact_attempts server-side -- mirror
+    // that locally so the attempt badges clear immediately
+    const wipesAttempts = field === 'confirmation_status' && typeof value === 'string' && isTerminalConfirmationStatus(value);
+    const nextOrder = { ...order, [field]: value, ...(wipesAttempts ? { contact_attempts: [] } : {}) };
     setOrder(nextOrder);
     setSaving(true);
     setMessage('');
@@ -200,11 +211,32 @@ export default function OrderDetailPage() {
     await updateField('archived_at', archiving ? new Date().toISOString() : null);
   };
 
-  const bumpConfirmation = async () => {
+  const [attemptLogging, setAttemptLogging] = useState<string | null>(null);
+
+  const logAttempt = async (type: string) => {
     if (!order) return;
-    const index = confirmationSteps.indexOf(order.confirmation_status);
-    const next = confirmationSteps[(index + 1) % confirmationSteps.length];
-    await updateField('confirmation_status', next);
+    setAttemptLogging(type);
+    setMessage('');
+
+    try {
+      const response = await fetch('/api/orders/attempts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ order_id: order.id, type }),
+      });
+      const result = await response.json();
+
+      if (!response.ok || !result.ok) {
+        setMessage(result.error || 'Unable to log attempt');
+        return;
+      }
+
+      setOrder((prev) => (prev ? { ...prev, contact_attempts: result.data.attempts } : prev));
+      setMessage(result.sheetSyncWarning || 'Saved');
+      loadHistory();
+    } finally {
+      setAttemptLogging(null);
+    }
   };
 
   if (!order) {
@@ -263,18 +295,46 @@ export default function OrderDetailPage() {
 
       <div style={{ display: 'grid', gap: '0.75rem', marginTop: '1rem' }}>
         <div>
-          <label>Confirmation status</label>
-          <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.25rem' }}>
-            <select
-              value={order.confirmation_status}
-              onChange={(e) => updateField('confirmation_status', e.target.value)}
-            >
-              {confirmationSteps.map((step) => (
-                <option key={step} value={step}>{statusLabel(step)}</option>
-              ))}
-            </select>
-            <button type="button" onClick={bumpConfirmation}>Bump</button>
+          <label>Contact attempts</label>
+          <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.25rem', flexWrap: 'wrap', alignItems: 'center' }}>
+            {formatAttemptsForDisplay(order.contact_attempts ?? []) ? (
+              <span style={{ ...statusBadgeStyle('pending'), borderRadius: '999px', padding: '0.25rem 0.6rem', fontSize: '0.9rem', fontWeight: 600 }}>
+                {formatAttemptsForDisplay(order.contact_attempts ?? [])}
+              </span>
+            ) : null}
+            {!isTerminalConfirmationStatus(order.confirmation_status) ? ATTEMPT_TYPES.map((type) => {
+              const count = (order.contact_attempts ?? []).find((a) => a.type === type)?.count ?? 0;
+              const max = ATTEMPT_MAX[type as keyof typeof ATTEMPT_MAX];
+              const capped = count >= max;
+              return (
+                <button
+                  key={type}
+                  type="button"
+                  onClick={() => logAttempt(type)}
+                  disabled={capped || attemptLogging === type}
+                  title={capped ? `${ATTEMPT_TYPE_LABELS[type]} is capped at ${max} -- move to a terminal status to reset` : `Log a ${ATTEMPT_TYPE_LABELS[type]} attempt`}
+                  style={{ opacity: capped ? 0.45 : 1 }}
+                >
+                  {attemptLogging === type ? '...' : capped ? `${ATTEMPT_TYPE_LABELS[type]} (capped)` : `+ ${ATTEMPT_TYPE_LABELS[type]}`}
+                </button>
+              );
+            }) : (
+              <span style={{ color: '#666', fontSize: '0.85rem' }}>Move status back to Pending to log attempts.</span>
+            )}
           </div>
+        </div>
+
+        <div>
+          <label>Confirmation status</label>
+          <select
+            value={order.confirmation_status}
+            onChange={(e) => updateField('confirmation_status', e.target.value)}
+            style={{ display: 'block', marginTop: '0.25rem' }}
+          >
+            {confirmationStatusOptions.map((step) => (
+              <option key={step} value={step}>{statusLabel(step)}</option>
+            ))}
+          </select>
         </div>
 
         <div>

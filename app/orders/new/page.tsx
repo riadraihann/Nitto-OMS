@@ -3,7 +3,7 @@
 import { FormEvent, useState, type ChangeEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import { defaultConfirmationStatus } from '@/lib/orderDefaults.mjs';
-import { urgencyTypeOptions, urgencyTypeOptionLabel } from '@/lib/theme';
+import { urgencyTypeOptions, urgencyTypeOptionLabel, confirmationStatusOptions, statusLabel } from '@/lib/theme';
 
 type OrderItemInput = {
   sku: string;
@@ -219,14 +219,9 @@ export default function NewOrderPage() {
         <label>
           Confirmation status
           <select name="confirmation_status" value={form.confirmation_status} onChange={handleChange}>
-            <option value="pending">Pending</option>
-            <option value="x1">X1</option>
-            <option value="x2">X2</option>
-            <option value="x3">X3</option>
-            <option value="confirmed_m">Confirmed (M)</option>
-            <option value="confirmed_wa">Confirmed (Wa)</option>
-            <option value="confirmed_c">Confirmed (C)</option>
-            <option value="cancelled">Cancelled</option>
+            {confirmationStatusOptions.map((status) => (
+              <option key={status} value={status}>{statusLabel(status)}</option>
+            ))}
           </select>
           <span style={{ display: 'block', fontSize: '0.8rem', color: '#666', marginTop: '0.15rem' }}>
             Auto-filled based on order source ({defaultConfirmationStatus(form.order_source, new Date()) === 'confirmed_m' ? 'manual/walk-in channel, no call needed' : 'needs a confirmation call'}) — change it if this order is different.

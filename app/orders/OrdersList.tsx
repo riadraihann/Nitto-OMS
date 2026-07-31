@@ -2,8 +2,9 @@
 
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
-import { statusBadgeStyle, statusLabel, confirmationSteps, deliveryOptions, urgencyTypeOptions, urgencyTypeOptionLabel, urgencyLabel, telHref, CALL_PENDING_STAGES, isHistoryDelivery } from '@/lib/theme';
+import { statusBadgeStyle, statusLabel, confirmationStatusOptions, deliveryOptions, urgencyTypeOptions, urgencyTypeOptionLabel, urgencyLabel, telHref, CALL_PENDING_STAGES, isHistoryDelivery } from '@/lib/theme';
 import { NEEDS_REVIEW_REASON_LABELS } from '@/lib/orderValidation.mjs';
+import { ATTEMPT_TYPES, ATTEMPT_MAX, ATTEMPT_TYPE_LABELS, isTerminalConfirmationStatus, formatAttemptsForDisplay } from '@/lib/contactAttempts.mjs';
 import PaginationBar from '@/app/components/PaginationBar';
 
 type OrderItem = {
@@ -11,6 +12,12 @@ type OrderItem = {
   product_name: string;
   quantity: number;
   unit_price: number;
+};
+
+type ContactAttempt = {
+  type: string;
+  count: number;
+  first_logged_at: string | null;
 };
 
 type OrderRow = {
@@ -29,6 +36,7 @@ type OrderRow = {
   needs_review: boolean;
   needs_review_reasons: string[] | null;
   order_items: OrderItem[];
+  contact_attempts: ContactAttempt[];
 };
 
 type OrdersListProps = {
@@ -102,7 +110,10 @@ export default function OrdersList({ orders: initialOrders, view, bucket, totalC
 
   const updateField = async (orderId: number, field: 'confirmation_status' | 'delivery_status', value: string) => {
     const previous = orders.find((o) => o.id === orderId)?.[field];
-    setOrders((prev) => prev.map((o) => (o.id === orderId ? { ...o, [field]: value } : o)));
+    // moving to a terminal confirmation status wipes contact_attempts server-side (see
+    // app/api/orders/route.ts) -- mirror that locally so the badge clears immediately
+    const wipesAttempts = field === 'confirmation_status' && isTerminalConfirmationStatus(value);
+    setOrders((prev) => prev.map((o) => (o.id === orderId ? { ...o, [field]: value, ...(wipesAttempts ? { contact_attempts: [] } : {}) } : o)));
     setSavingIds((prev) => new Set(prev).add(orderId));
     setRowErrors((prev) => { const next = { ...prev }; delete next[orderId]; return next; });
     setRowWarnings((prev) => { const next = { ...prev }; delete next[orderId]; return next; });
@@ -123,8 +134,8 @@ export default function OrdersList({ orders: initialOrders, view, bucket, totalC
           setRowWarnings((prev) => ({ ...prev, [orderId]: result.sheetSyncWarning }));
         }
 
-        // Call Pending only ever shows pending/x1/x2/x3 -- once a row is marked confirmed or
-        // cancelled it no longer belongs here, so drop it from view immediately rather than
+        // Call Pending only ever shows 'pending' orders -- once a row is marked to any terminal
+        // status it no longer belongs here, so drop it from view immediately rather than
         // leaving it visible (with an updated badge) until the next full page load
         const leftCallPending = field === 'confirmation_status' && view === 'call-pending' && !CALL_PENDING_STAGES.includes(value);
 
@@ -146,6 +157,39 @@ export default function OrdersList({ orders: initialOrders, view, bucket, totalC
       setRowErrors((prev) => ({ ...prev, [orderId]: 'Unable to save' }));
     } finally {
       setSavingIds((prev) => { const next = new Set(prev); next.delete(orderId); return next; });
+    }
+  };
+
+  const [attemptLoggingIds, setAttemptLoggingIds] = useState<Set<string>>(new Set());
+
+  const logAttempt = async (orderId: number, type: string) => {
+    const key = `${orderId}:${type}`;
+    setAttemptLoggingIds((prev) => new Set(prev).add(key));
+    setRowErrors((prev) => { const next = { ...prev }; delete next[orderId]; return next; });
+    setRowWarnings((prev) => { const next = { ...prev }; delete next[orderId]; return next; });
+
+    try {
+      const response = await fetch('/api/orders/attempts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ order_id: orderId, type }),
+      });
+      const result = await response.json();
+
+      if (!response.ok || !result.ok) {
+        setRowErrors((prev) => ({ ...prev, [orderId]: result.error || 'Unable to log attempt' }));
+        return;
+      }
+
+      if (result.sheetSyncWarning) {
+        setRowWarnings((prev) => ({ ...prev, [orderId]: result.sheetSyncWarning }));
+      }
+
+      setOrders((prev) => prev.map((o) => (o.id === orderId ? { ...o, contact_attempts: result.data.attempts } : o)));
+    } catch {
+      setRowErrors((prev) => ({ ...prev, [orderId]: 'Unable to log attempt' }));
+    } finally {
+      setAttemptLoggingIds((prev) => { const next = new Set(prev); next.delete(key); return next; });
     }
   };
 
@@ -375,6 +419,8 @@ export default function OrdersList({ orders: initialOrders, view, bucket, totalC
               ? 'order-row order-row--hold'
               : 'order-row';
           const displayedUrgencyType = pendingUrgencyType[order.id] ?? order.urgency_type;
+          const attemptsDisplay = formatAttemptsForDisplay(order.contact_attempts);
+          const isTerminal = isTerminalConfirmationStatus(order.confirmation_status);
 
           return (
             <article key={order.id} className={rowClassName} style={{ border: '1px solid var(--border)', borderRadius: '12px', padding: '1.1rem 1.25rem', display: 'flex', gap: '0.75rem' }}>
@@ -413,6 +459,33 @@ export default function OrdersList({ orders: initialOrders, view, bucket, totalC
                   <strong>Items:</strong> {itemSummary || 'No items'}
                 </div>
 
+                <div style={{ marginTop: '0.75rem', display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
+                  {attemptsDisplay ? (
+                    <span style={{ ...statusBadgeStyle('pending'), borderRadius: '999px', padding: '0.25rem 0.6rem', fontSize: '0.85rem', fontWeight: 600 }}>
+                      {attemptsDisplay}
+                    </span>
+                  ) : null}
+                  {!isTerminal ? ATTEMPT_TYPES.map((type) => {
+                    const count = order.contact_attempts.find((a) => a.type === type)?.count ?? 0;
+                    const max = ATTEMPT_MAX[type as keyof typeof ATTEMPT_MAX];
+                    const capped = count >= max;
+                    const loading = attemptLoggingIds.has(`${order.id}:${type}`);
+                    return (
+                      <button
+                        key={type}
+                        type="button"
+                        className="btn-plain"
+                        onClick={() => logAttempt(order.id, type)}
+                        disabled={capped || loading}
+                        title={capped ? `${ATTEMPT_TYPE_LABELS[type]} is capped at ${max} -- move to a terminal status to reset` : `Log a ${ATTEMPT_TYPE_LABELS[type]} attempt`}
+                        style={{ fontSize: '0.8rem', opacity: capped ? 0.45 : 1 }}
+                      >
+                        {loading ? '...' : capped ? `${ATTEMPT_TYPE_LABELS[type]} (capped)` : `+ ${ATTEMPT_TYPE_LABELS[type]}`}
+                      </button>
+                    );
+                  }) : null}
+                </div>
+
                 <div style={{ marginTop: '0.75rem', display: 'flex', gap: '0.75rem', flexWrap: 'wrap', alignItems: 'center' }}>
                   <label style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.85rem' }}>
                     Urgency
@@ -440,13 +513,13 @@ export default function OrdersList({ orders: initialOrders, view, bucket, totalC
                     />
                   ) : null}
                   <label style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.85rem' }}>
-                    Confirmation
+                    Status
                     <select
                       value={order.confirmation_status}
                       onChange={(e) => updateField(order.id, 'confirmation_status', e.target.value)}
                       style={{ ...statusBadgeStyle(order.confirmation_status), border: 'none', borderRadius: '999px', padding: '0.25rem 0.6rem' }}
                     >
-                      {confirmationSteps.map((step) => (
+                      {confirmationStatusOptions.map((step) => (
                         <option key={step} value={step}>{statusLabel(step)}</option>
                       ))}
                     </select>

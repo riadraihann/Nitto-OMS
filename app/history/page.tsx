@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { supabaseAdmin } from '@/lib/supabase';
-import { HISTORY_DELIVERY_STATUSES } from '@/lib/theme';
+import { HISTORY_DELIVERY_STATUSES, confirmationStatusOptions, statusLabel } from '@/lib/theme';
 import { PAGE_SIZE_OPTIONS, parsePageParams, rangeFor, buildQueryHref } from '@/lib/pagination';
 import OrdersList from '../orders/OrdersList';
 
@@ -12,6 +12,12 @@ type OrderItem = {
   product_name: string;
   quantity: number;
   unit_price: number;
+};
+
+type ContactAttempt = {
+  type: string;
+  count: number;
+  first_logged_at: string | null;
 };
 
 type OrderRow = {
@@ -30,6 +36,7 @@ type OrderRow = {
   needs_review: boolean;
   needs_review_reasons: string[] | null;
   order_items: OrderItem[];
+  contact_attempts: ContactAttempt[];
 };
 
 type HistoryPageProps = {
@@ -59,7 +66,7 @@ export default async function HistoryPage({ searchParams }: HistoryPageProps) {
 
   let query = supabaseAdmin
     .from('orders')
-    .select('id, order_number, customer_name, phone, address, urgency_type, urgency_target_date, confirmation_status, delivery_status, created_at, total_amount, archived_at, needs_review, needs_review_reasons, order_items(sku, product_name, quantity, unit_price)', { count: 'exact' })
+    .select('id, order_number, customer_name, phone, address, urgency_type, urgency_target_date, confirmation_status, delivery_status, created_at, total_amount, archived_at, needs_review, needs_review_reasons, order_items(sku, product_name, quantity, unit_price), contact_attempts(type, count, first_logged_at)', { count: 'exact' })
     .is('archived_at', null)
     .in('delivery_status', delivery ? [delivery] : HISTORY_DELIVERY_STATUSES)
     .order('created_at', { ascending: false });
@@ -158,14 +165,9 @@ export default async function HistoryPage({ searchParams }: HistoryPageProps) {
         </select>
         <select name="confirmation_status" defaultValue={confirmation}>
           <option value="">All confirmations</option>
-          <option value="pending">Pending</option>
-          <option value="x1">X1</option>
-          <option value="x2">X2</option>
-          <option value="x3">X3</option>
-          <option value="confirmed_m">Confirmed (M)</option>
-          <option value="confirmed_wa">Confirmed (Wa)</option>
-          <option value="confirmed_c">Confirmed (C)</option>
-          <option value="cancelled">Cancelled</option>
+          {confirmationStatusOptions.map((status) => (
+            <option key={status} value={status}>{statusLabel(status)}</option>
+          ))}
         </select>
         {/* only these two statuses are ever "history" -- packaging/returned live on /orders */}
         <select name="delivery_status" defaultValue={delivery}>

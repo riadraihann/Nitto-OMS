@@ -26,9 +26,6 @@ export const statusBadgeColors: Record<string, { background: string; color: stri
 
   // confirmation_status
   pending: { background: '#eef1f6', color: '#3d4a63' },
-  x1: { background: '#e3f2fd', color: '#1565c0' },
-  x2: { background: '#cfe8fc', color: '#0d47a1' },
-  x3: { background: '#d7f0ee', color: '#00695c' },
   confirmed_m: { background: '#e8f5e9', color: '#2e7d32' },
   confirmed_wa: { background: '#e8f5e9', color: '#2e7d32' },
   confirmed_c: { background: '#e8f5e9', color: '#2e7d32' },
@@ -52,9 +49,6 @@ const statusLabels: Record<string, string> = {
   confirmed_m: 'Confirmed (M)',
   confirmed_wa: 'Confirmed (Wa)',
   confirmed_c: 'Confirmed (C)',
-  x1: 'X1',
-  x2: 'X2',
-  x3: 'X3',
   sent_to_courier: 'Sent to courier',
 };
 
@@ -62,17 +56,19 @@ export function statusLabel(status: string): string {
   return statusLabels[status] ?? status.charAt(0).toUpperCase() + status.slice(1);
 }
 
-// shared option lists for the confirmation/delivery/urgency selects on both the order detail
-// page and the inline row editors on /orders
-export const confirmationSteps = ['pending', 'x1', 'x2', 'x3', 'confirmed_m', 'confirmed_wa', 'confirmed_c', 'cancelled'];
+// confirmation_status is now just pending + five terminal values -- attempt tracking
+// (no_answer/unreachable/phone_off) lives in contact_attempts instead, see
+// lib/contactAttempts.mjs. Shared by the status dropdown on the order detail page, the inline
+// row editor on /orders, and the new-order form.
+export const confirmationStatusOptions = ['pending', 'confirmed_c', 'confirmed_wa', 'confirmed_m', 'cancelled', 'hold'];
 export const deliveryOptions = ['packaging', 'sent_to_courier', 'delivered', 'returned'];
 export const urgencyTypeOptions = ['normal', 'urgent', 'hold', 'vu', 'd'];
 
 // "Call Pending" view (/orders?view=call-pending): shopify orders still needing a call.
-// Shared between the server-side filter query and the client list, which uses it to drop a
-// row out of view the instant it's marked confirmed/cancelled via the inline editor -- without
-// this shared source of truth the two could silently drift apart.
-export const CALL_PENDING_STAGES = ['pending', 'x1', 'x2', 'x3'];
+// Under the new confirmation_status set, 'pending' is the only non-terminal value, so this is
+// just [pending] now -- kept as an array (not a plain equality check) so the server query and
+// OrdersList's client-side row-removal logic keep sharing one source of truth.
+export const CALL_PENDING_STAGES = ['pending'];
 
 // The /orders <-> /history split: an order is "history" once it's shipped (sent to courier or
 // already delivered), "active" otherwise. Shared between both pages' server queries and

@@ -5,6 +5,7 @@ import { buildColumnC } from '@/lib/sheetRowParser.mjs';
 import { writeColumnC } from '@/lib/sheetWriteBack';
 import { diffOrderFields, logOrderHistory } from '@/lib/orderHistory.mjs';
 import { computeNeedsReview } from '@/lib/orderValidation.mjs';
+import { isTerminalConfirmationStatus } from '@/lib/contactAttempts.mjs';
 
 // Fields whose values feed computeNeedsReview -- a PATCH only needs to recompute needs_review
 // when one of these actually changed (item count can't change via this endpoint at all, so it's
@@ -26,8 +27,8 @@ export async function GET(request: Request) {
 
   try {
     const query = id
-      ? supabaseAdmin.from('orders').select('*, order_items(*)').eq('id', id).single()
-      : supabaseAdmin.from('orders').select('*, order_items(*)').order('created_at', { ascending: false });
+      ? supabaseAdmin.from('orders').select('*, order_items(*), contact_attempts(type, count, first_logged_at)').eq('id', id).single()
+      : supabaseAdmin.from('orders').select('*, order_items(*), contact_attempts(type, count, first_logged_at)').order('created_at', { ascending: false });
 
     const { data, error } = await query;
 
@@ -156,13 +157,25 @@ export async function PATCH(request: Request) {
     const changes = diffOrderFields(before, data, updatedFields);
     await logOrderHistory(supabaseAdmin, id, changes, 'moderator');
 
+    // moving to a terminal confirmation status wipes all contact-attempt counters -- the
+    // display becomes just that status, not the attempt history alongside it
+    if ('confirmation_status' in normalized.payload && isTerminalConfirmationStatus(normalized.payload.confirmation_status as string)) {
+      const { data: existingAttempts } = await supabaseAdmin.from('contact_attempts').select('type, count').eq('order_id', id);
+      if (existingAttempts && existingAttempts.length > 0) {
+        await supabaseAdmin.from('contact_attempts').delete().eq('order_id', id);
+        const summary = existingAttempts.map((a) => `${a.type}=${a.count}`).join(', ');
+        await logOrderHistory(supabaseAdmin, id, [{ field: 'contact_attempts', old_value: summary, new_value: null }], 'moderator');
+      }
+    }
+
     let sheetSyncWarning: string | undefined;
     const touchedSheetSyncedField = Object.keys(normalized.payload).some((key) => SHEET_SYNCED_FIELDS.includes(key));
 
     // write-back only applies to orders that actually came from the sheet sync -- an order
     // created manually or via the June CSV import has no matching sheet row to write into
     if (touchedSheetSyncedField && data.synced_from_sheet_at && data.sheet_row_number) {
-      const columnCValue = buildColumnC(data.urgency_type, data.urgency_target_date, data.confirmation_status);
+      const { data: attemptRows } = await supabaseAdmin.from('contact_attempts').select('type, count, first_logged_at').eq('order_id', id);
+      const columnCValue = buildColumnC(data.urgency_type, data.urgency_target_date, data.confirmation_status, attemptRows ?? []);
       const writeResult = await writeColumnC(data.sheet_row_number, columnCValue);
       if (!writeResult.ok) {
         sheetSyncWarning = `Saved, but couldn't write back to the sheet: ${writeResult.error}`;

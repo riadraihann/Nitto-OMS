@@ -1,4 +1,5 @@
 import { supabaseAdmin } from '@/lib/supabase';
+import { TERMINAL_CONFIRMATION_STATUSES } from '@/lib/contactAttempts.mjs';
 
 export type OrderRef = {
   id: number;
@@ -20,8 +21,9 @@ export type AttentionNeeded = {
 };
 
 // orders in these states are "done" and legitimately expected to never change again -- flagging
-// them as stale or urgency-overdue would just be noise, not something anyone needs to act on
-const RESOLVED_CONFIRMATION = ['confirmed_c', 'confirmed_m', 'confirmed_wa', 'cancelled'];
+// them as stale would just be noise, not something anyone needs to act on. TERMINAL_CONFIRMATION_
+// STATUSES (confirmed_c/wa/m, cancelled, hold) is the shared source of truth from
+// lib/contactAttempts.mjs.
 const RESOLVED_DELIVERY = ['delivered', 'returned'];
 
 // how far back to look for possible duplicate orders -- unlike the other checks (which are
@@ -86,7 +88,7 @@ async function findStaleStatus(staleDays: number, nowIso: string): Promise<Stale
     .from('orders')
     .select('id, order_number, customer_name, phone, confirmation_status, delivery_status, created_at')
     .is('archived_at', null)
-    .not('confirmation_status', 'in', `(${RESOLVED_CONFIRMATION.join(',')})`)
+    .not('confirmation_status', 'in', `(${TERMINAL_CONFIRMATION_STATUSES.join(',')})`)
     .not('delivery_status', 'in', `(${RESOLVED_DELIVERY.join(',')})`);
 
   if (error) throw error;
@@ -149,10 +151,12 @@ async function findUrgencyPassed(todayStr: string, nowIso: string): Promise<Urge
 
   const overdue: UrgencyPassed[] = [];
   for (const order of data ?? []) {
-    // cancelled orders were never going to ship -- the urgency deadline is moot regardless of
-    // delivery_status, so cancellation alone clears this flag (unlike the OR used elsewhere:
-    // a still-active order needs BOTH "not cancelled" and "not yet delivered" to stay flagged)
-    const stillNeedsAction = order.confirmation_status !== 'cancelled' && !RESOLVED_DELIVERY.includes(order.delivery_status);
+    // cancelled or on-hold orders were never going to ship on schedule -- the urgency deadline
+    // is moot regardless of delivery_status, so either alone clears this flag (unlike the AND
+    // below: a still-active, still-confirmed order needs BOTH "not cancelled/hold" and "not yet
+    // delivered" to stay flagged -- a confirmed order still sitting in packaging past its
+    // ship-by date is exactly what this check exists to catch)
+    const stillNeedsAction = order.confirmation_status !== 'cancelled' && order.confirmation_status !== 'hold' && !RESOLVED_DELIVERY.includes(order.delivery_status);
     if (!stillNeedsAction) continue;
     overdue.push({
       id: order.id,

@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { supabaseAdmin } from '@/lib/supabase';
-import { CALL_PENDING_STAGES, HISTORY_DELIVERY_STATUSES } from '@/lib/theme';
+import { CALL_PENDING_STAGES, HISTORY_DELIVERY_STATUSES, confirmationStatusOptions, statusLabel } from '@/lib/theme';
 import { PAGE_SIZE_OPTIONS, parsePageParams, rangeFor, buildQueryHref } from '@/lib/pagination';
 import OrdersList from './OrdersList';
 
@@ -12,6 +12,12 @@ type OrderItem = {
   product_name: string;
   quantity: number;
   unit_price: number;
+};
+
+type ContactAttempt = {
+  type: string;
+  count: number;
+  first_logged_at: string | null;
 };
 
 type OrderRow = {
@@ -30,6 +36,7 @@ type OrderRow = {
   needs_review: boolean;
   needs_review_reasons: string[] | null;
   order_items: OrderItem[];
+  contact_attempts: ContactAttempt[];
 };
 
 type OrdersPageProps = {
@@ -66,7 +73,7 @@ export default async function OrdersPage({ searchParams }: OrdersPageProps) {
 
   let query = supabaseAdmin
     .from('orders')
-    .select('id, order_number, customer_name, phone, address, urgency_type, urgency_target_date, confirmation_status, delivery_status, created_at, total_amount, archived_at, needs_review, needs_review_reasons, order_items(sku, product_name, quantity, unit_price)', { count: 'exact' });
+    .select('id, order_number, customer_name, phone, address, urgency_type, urgency_target_date, confirmation_status, delivery_status, created_at, total_amount, archived_at, needs_review, needs_review_reasons, order_items(sku, product_name, quantity, unit_price), contact_attempts(type, count, first_logged_at)', { count: 'exact' });
 
   if (view === 'archived') {
     // the one view that's ABOUT archived orders -- everywhere else excludes them
@@ -103,10 +110,10 @@ export default async function OrdersPage({ searchParams }: OrdersPageProps) {
     query = query.lte('created_at', `${dateTo}T23:59:59.999+06:00`);
   }
 
-  // "sort by confirmation stage" (Call Pending only): pending/x1/x2/x3 happen to sort in
-  // exactly that order alphabetically, so a plain column sort gives the right stage grouping
-  // server-side -- no need to fetch everything and reorder client-side, which would have broken
-  // pagination (page 2 wouldn't reliably follow page 1 in stage order).
+  // "sort by confirmation stage" (Call Pending only): a leftover from when confirmation_status
+  // itself carried pending/x1/x2/x3 -- Call Pending is now scoped to a single value ('pending'),
+  // so this is a harmless no-op identical to date sort, not actively removed since it doesn't
+  // produce wrong output, just redundant with the date option.
   if (view === 'call-pending' && sort === 'stage') {
     query = query.order('confirmation_status', { ascending: true }).order('created_at', { ascending: false });
   } else {
@@ -219,14 +226,9 @@ export default async function OrdersPage({ searchParams }: OrdersPageProps) {
             </select>
             <select name="confirmation_status" defaultValue={confirmation}>
               <option value="">All confirmations</option>
-              <option value="pending">Pending</option>
-              <option value="x1">X1</option>
-              <option value="x2">X2</option>
-              <option value="x3">X3</option>
-              <option value="confirmed_m">Confirmed (M)</option>
-              <option value="confirmed_wa">Confirmed (Wa)</option>
-              <option value="confirmed_c">Confirmed (C)</option>
-              <option value="cancelled">Cancelled</option>
+              {confirmationStatusOptions.map((status) => (
+                <option key={status} value={status}>{statusLabel(status)}</option>
+              ))}
             </select>
             {/* sent_to_courier/delivered live on /history -- offering them here would always
                 return zero rows, since the base query already excludes them */}

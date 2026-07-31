@@ -2,6 +2,7 @@ import { supabaseAdmin } from '@/lib/supabase';
 import { parseSheetRow } from '@/lib/sheetRowParser.mjs';
 import { diffOrderFields, summarizeItems } from '@/lib/orderHistory.mjs';
 import { computeNeedsReview, reviewReasonsChanged } from '@/lib/orderValidation.mjs';
+import { ATTEMPT_TYPES, isTerminalConfirmationStatus } from '@/lib/contactAttempts.mjs';
 
 type HistoryEntry = { order_id: number; field: string; old_value: string | null; new_value: string | null; source: string };
 
@@ -19,6 +20,8 @@ async function flushHistory(entries: HistoryEntry[]): Promise<void> {
   }
 }
 
+type ParsedAttempt = { type: string; count: number };
+
 type ParsedRow = {
   order_number: string;
   created_at: string;
@@ -33,10 +36,13 @@ type ParsedRow = {
   parsedUrgencyType: string;
   parsedUrgencyTargetDate: string | null;
   urgencyMalformed: boolean;
-  parsedConfirmationStatus: string;
+  parsedConfirmationStatus: string | null;
+  parsedAttempts: ParsedAttempt[];
   columnCWarnings: string[];
-  defaults: { urgency_type: string; delivery_status: string };
+  defaults: { urgency_type: string; confirmation_status: string; delivery_status: string };
 };
+
+type ExistingAttempt = { id: number; type: string; count: number; first_logged_at: string | null };
 
 type ExistingOrder = {
   id: number;
@@ -55,6 +61,7 @@ type ExistingOrder = {
   needs_review: boolean;
   needs_review_reasons: string[] | null;
   order_items: { product_name: string; quantity: number }[];
+  contact_attempts: ExistingAttempt[];
 };
 
 export type ReconcileResult = {
@@ -108,10 +115,15 @@ function itemsChanged(parsedItems: { product_name: string; quantity: number }[],
 //    every pass.
 //  - confirmation_status and urgency_type/urgency_target_date: bidirectionally synced via
 //    column C (see lib/sheetRowParser.mjs's parseColumnC/buildColumnC and the app -> sheet
-//    write-back in app/api/orders/route.ts). Only applied here if the parsed value actually
-//    differs from what's already in the DB -- this is half of loop prevention: our own
-//    write-back echoing back through the sheet must be a no-op, not another DB write that
-//    triggers another write-back.
+//    write-back in app/api/orders/route.ts and app/api/orders/attempts/route.ts). Only applied
+//    here if the parsed value actually differs from what's already in the DB -- this is half of
+//    loop prevention: our own write-back echoing back through the sheet must be a no-op, not
+//    another DB write that triggers another write-back.
+//  - contact_attempts (no_answer/unreachable/phone_off counters): reconciled from column C the
+//    same way, but ONLY while the order is currently pending -- a terminal order's attempts are
+//    already wiped and a sheet cell with no terminal marker yet (stale/lagging write-back) must
+//    never be misread as "clear the attempts". If the sheet shows a terminal marker, that always
+//    wins and wipes attempts regardless of the order's current state.
 //  - delivery_status, happiness_score, product_suggestions: still purely staff-managed in the
 //    app, never touched by sheet sync.
 export async function reconcileSheetRows(rows: unknown[]): Promise<ReconcileResult> {
@@ -154,7 +166,7 @@ export async function reconcileSheetRows(rows: unknown[]): Promise<ReconcileResu
     const chunk = orderNumbers.slice(i, i + LOOKUP_CHUNK);
     const { data, error } = await supabaseAdmin
       .from('orders')
-      .select('id, order_number, confirmation_status, urgency_type, urgency_target_date, customer_name, phone, address, total_amount, special_instructions, cancel_return_reason, created_at, order_source, sheet_row_number, needs_review, needs_review_reasons, order_items(product_name, quantity)')
+      .select('id, order_number, confirmation_status, urgency_type, urgency_target_date, customer_name, phone, address, total_amount, special_instructions, cancel_return_reason, created_at, order_source, sheet_row_number, needs_review, needs_review_reasons, order_items(product_name, quantity), contact_attempts(id, type, count, first_logged_at)')
       .in('order_number', chunk)
       .not('synced_from_sheet_at', 'is', null);
 
@@ -177,7 +189,7 @@ export async function reconcileSheetRows(rows: unknown[]): Promise<ReconcileResu
     const {
       items, defaults, sheetRowNumber,
       parsedUrgencyType, parsedUrgencyTargetDate, urgencyMalformed,
-      parsedConfirmationStatus, columnCWarnings,
+      parsedConfirmationStatus, parsedAttempts, columnCWarnings,
       ...sheetOwnedFields
     } = parsed;
 
@@ -189,12 +201,14 @@ export async function reconcileSheetRows(rows: unknown[]): Promise<ReconcileResu
 
     if (existing) {
       const update: Record<string, unknown> = {};
+      let wipeAttempts = false;
 
-      // confirmation: apply only if it actually differs (loop prevention) -- parseColumnC
-      // always resolves to a definite status (defaulting to 'pending' if no marker is found),
-      // so there's no "unrecognized, leave alone" case for this piece specifically
-      if (parsedConfirmationStatus !== existing.confirmation_status) {
+      // confirmation: a terminal marker in the sheet always wins (and wipes attempts) if it
+      // differs from the current status. No marker (null) means "no signal from the sheet" --
+      // leave confirmation_status untouched either way.
+      if (parsedConfirmationStatus && parsedConfirmationStatus !== existing.confirmation_status) {
         update.confirmation_status = parsedConfirmationStatus;
+        wipeAttempts = true;
       }
 
       // urgency: apply only if parsed cleanly AND actually differs (compare by day-of-month,
@@ -226,9 +240,38 @@ export async function reconcileSheetRows(rows: unknown[]): Promise<ReconcileResu
         }
       }
 
+      // contact_attempts: reconcile from the sheet's parsed attempt codes, but only while the
+      // order is (and stays) pending -- if this pass is setting a terminal status, wipeAttempts
+      // above already covers it; if the order was ALREADY terminal and the sheet shows no
+      // terminal marker (a stale/lagging cell), attempts stay untouched rather than being
+      // resurrected from a column C that hasn't caught up yet.
+      const attemptOps: { action: 'insert' | 'update' | 'delete'; type: string; count: number; existingId?: number }[] = [];
+      const orderStaysPending = !wipeAttempts && !isTerminalConfirmationStatus(update.confirmation_status as string ?? existing.confirmation_status);
+      if (orderStaysPending) {
+        for (const type of ATTEMPT_TYPES) {
+          const parsedForType = parsedAttempts.find((a) => a.type === type);
+          const parsedCount = parsedForType?.count ?? 0;
+          const existingRow = existing.contact_attempts.find((a) => a.type === type);
+          const existingCount = existingRow?.count ?? 0;
+
+          if (parsedCount === existingCount) continue;
+
+          if (parsedCount === 0 && existingRow) {
+            attemptOps.push({ action: 'delete', type, count: 0, existingId: existingRow.id });
+          } else if (existingRow) {
+            attemptOps.push({ action: 'update', type, count: parsedCount, existingId: existingRow.id });
+          } else {
+            attemptOps.push({ action: 'insert', type, count: parsedCount });
+          }
+
+          historyEntries.push({ order_id: existing.id, field: type, old_value: existingCount > 0 ? String(existingCount) : null, new_value: parsedCount > 0 ? String(parsedCount) : null, source: 'sheet_sync' });
+        }
+      }
+      const needsAttemptsUpdate = wipeAttempts ? existing.contact_attempts.length > 0 : attemptOps.length > 0;
+
       // the whole point: an unchanged row costs zero DB writes, not an update + a delete +
       // an insert every single sync pass -- that's what was making "Sync Now" take minutes
-      if (!needsFieldUpdate && !needsItemsUpdate) {
+      if (!needsFieldUpdate && !needsItemsUpdate && !needsAttemptsUpdate) {
         unchanged += 1;
         continue;
       }
@@ -253,6 +296,29 @@ export async function reconcileSheetRows(rows: unknown[]): Promise<ReconcileResu
         }
         if (new Date(sheetOwnedFields.created_at as string).getTime() !== new Date(existing.created_at).getTime()) {
           historyEntries.push({ order_id: existing.id, field: 'created_at', old_value: existing.created_at, new_value: sheetOwnedFields.created_at as string, source: 'sheet_sync' });
+        }
+      }
+
+      if (wipeAttempts && existing.contact_attempts.length > 0) {
+        const { error: wipeError } = await supabaseAdmin.from('contact_attempts').delete().eq('order_id', existing.id);
+        if (wipeError) {
+          errors.push({ order_number: orderNumber, error: wipeError.message });
+          continue;
+        }
+        const summary = existing.contact_attempts.map((a) => `${a.type}=${a.count}`).join(', ');
+        historyEntries.push({ order_id: existing.id, field: 'contact_attempts', old_value: summary, new_value: null, source: 'sheet_sync' });
+      } else if (attemptOps.length > 0) {
+        for (const op of attemptOps) {
+          if (op.action === 'delete') {
+            const { error: deleteAttemptError } = await supabaseAdmin.from('contact_attempts').delete().eq('id', op.existingId);
+            if (deleteAttemptError) { errors.push({ order_number: orderNumber, error: deleteAttemptError.message }); continue; }
+          } else if (op.action === 'update') {
+            const { error: updateAttemptError } = await supabaseAdmin.from('contact_attempts').update({ count: op.count, updated_at: nowIso }).eq('id', op.existingId);
+            if (updateAttemptError) { errors.push({ order_number: orderNumber, error: updateAttemptError.message }); continue; }
+          } else {
+            const { error: insertAttemptError } = await supabaseAdmin.from('contact_attempts').insert([{ order_id: existing.id, type: op.type, count: op.count, first_logged_at: nowIso }]);
+            if (insertAttemptError) { errors.push({ order_number: orderNumber, error: insertAttemptError.message }); continue; }
+          }
         }
       }
 
@@ -289,9 +355,11 @@ export async function reconcileSheetRows(rows: unknown[]): Promise<ReconcileResu
         warnings.push({ order_number: orderNumber, message: 'urgency marker malformed on new order -- used the default instead' });
       }
 
+      const newConfirmationStatus = parsedConfirmationStatus ?? defaults.confirmation_status;
+
       const insertRow = {
         ...sheetOwnedFields,
-        confirmation_status: parsedConfirmationStatus,
+        confirmation_status: newConfirmationStatus,
         urgency_type: urgencyMalformed ? defaults.urgency_type : parsedUrgencyType,
         urgency_target_date: urgencyMalformed ? null : parsedUrgencyTargetDate,
         delivery_status: defaults.delivery_status,
@@ -317,6 +385,19 @@ export async function reconcileSheetRows(rows: unknown[]): Promise<ReconcileResu
           .insert(items.map((item) => ({ order_id: newOrder.id, ...item })));
         if (insertItemsError) {
           errors.push({ order_number: orderNumber, error: insertItemsError.message });
+          continue;
+        }
+      }
+
+      // a brand-new order can arrive with attempt codes already in column C -- only meaningful
+      // if it landed in the pending state (a terminal marker on creation means no attempts, per
+      // the wipe rule)
+      if (!isTerminalConfirmationStatus(newConfirmationStatus) && parsedAttempts.length > 0) {
+        const { error: insertAttemptsError } = await supabaseAdmin
+          .from('contact_attempts')
+          .insert(parsedAttempts.map((a) => ({ order_id: newOrder.id, type: a.type, count: a.count, first_logged_at: nowIso })));
+        if (insertAttemptsError) {
+          errors.push({ order_number: orderNumber, error: insertAttemptsError.message });
           continue;
         }
       }
