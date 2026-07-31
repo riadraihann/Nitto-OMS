@@ -27,7 +27,9 @@ export const statusBadgeColors: Record<string, { background: string; color: stri
   x1: { background: '#e3f2fd', color: '#1565c0' },
   x2: { background: '#cfe8fc', color: '#0d47a1' },
   x3: { background: '#d7f0ee', color: '#00695c' },
-  confirmed: { background: '#e8f5e9', color: '#2e7d32' },
+  confirmed_m: { background: '#e8f5e9', color: '#2e7d32' },
+  confirmed_wa: { background: '#e8f5e9', color: '#2e7d32' },
+  confirmed_c: { background: '#e8f5e9', color: '#2e7d32' },
   cancelled: { background: '#f0f0f0', color: '#616161' },
 
   // delivery_status
@@ -39,4 +41,21 @@ export const statusBadgeColors: Record<string, { background: string; color: stri
 
 export function statusBadgeStyle(status: string) {
   return statusBadgeColors[status] ?? { background: '#f5f5f5', color: '#616161' };
+}
+
+// The three "confirmed" variants and a few others don't read well through a plain CSS
+// text-transform:capitalize (e.g. "confirmed_m" -> "Confirmed_m"), so badge/label text
+// should go through this instead of the raw stored value.
+const statusLabels: Record<string, string> = {
+  confirmed_m: 'Confirmed (M)',
+  confirmed_wa: 'Confirmed (Wa)',
+  confirmed_c: 'Confirmed (C)',
+  x1: 'X1',
+  x2: 'X2',
+  x3: 'X3',
+  sent_to_courier: 'Sent to courier',
+};
+
+export function statusLabel(status: string): string {
+  return statusLabels[status] ?? status.charAt(0).toUpperCase() + status.slice(1);
 }

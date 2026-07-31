@@ -2,6 +2,7 @@
 
 import { FormEvent, useState, type ChangeEvent } from 'react';
 import { useRouter } from 'next/navigation';
+import { defaultConfirmationStatus } from '@/lib/orderDefaults.mjs';
 
 type OrderItemInput = {
   sku: string;
@@ -30,7 +31,7 @@ const initialState: OrderFormState = {
   phone: '',
   address: '',
   urgency_status: 'normal',
-  confirmation_status: 'pending',
+  confirmation_status: defaultConfirmationStatus('shopify', new Date()),
   delivery_status: 'packaging',
   special_instructions: '',
   cancel_return_reason: '',
@@ -46,9 +47,23 @@ export default function NewOrderPage() {
   const [items, setItems] = useState<OrderItemInput[]>([createEmptyItem()]);
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState('');
+  // once staff picks a confirmation_status manually, stop auto-recomputing it when order_source changes
+  const [confirmationTouched, setConfirmationTouched] = useState(false);
 
   const handleChange = (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
+
+    if (name === 'confirmation_status') {
+      setConfirmationTouched(true);
+      setForm((prev) => ({ ...prev, confirmation_status: value }));
+      return;
+    }
+
+    if (name === 'order_source' && !confirmationTouched) {
+      setForm((prev) => ({ ...prev, order_source: value, confirmation_status: defaultConfirmationStatus(value, new Date()) }));
+      return;
+    }
+
     setForm((prev) => ({ ...prev, [name]: value }));
   };
 
@@ -181,12 +196,17 @@ export default function NewOrderPage() {
           Confirmation status
           <select name="confirmation_status" value={form.confirmation_status} onChange={handleChange}>
             <option value="pending">Pending</option>
-            <option value="x1">x1</option>
-            <option value="x2">x2</option>
-            <option value="x3">x3</option>
-            <option value="confirmed">Confirmed</option>
+            <option value="x1">X1</option>
+            <option value="x2">X2</option>
+            <option value="x3">X3</option>
+            <option value="confirmed_m">Confirmed (M)</option>
+            <option value="confirmed_wa">Confirmed (Wa)</option>
+            <option value="confirmed_c">Confirmed (C)</option>
             <option value="cancelled">Cancelled</option>
           </select>
+          <span style={{ display: 'block', fontSize: '0.8rem', color: '#666', marginTop: '0.15rem' }}>
+            Auto-filled based on order source ({defaultConfirmationStatus(form.order_source, new Date()) === 'confirmed_m' ? 'manual/walk-in channel, no call needed' : 'needs a confirmation call'}) — change it if this order is different.
+          </span>
         </label>
 
         <label>

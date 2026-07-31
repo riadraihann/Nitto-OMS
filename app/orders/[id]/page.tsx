@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { statusBadgeStyle } from '@/lib/theme';
+import { statusBadgeStyle, statusLabel } from '@/lib/theme';
 
 type OrderItem = {
   id?: number;
@@ -30,7 +30,7 @@ type Order = {
   order_items?: OrderItem[];
 };
 
-const confirmationSteps = ['pending', 'x1', 'x2', 'x3', 'confirmed', 'cancelled'];
+const confirmationSteps = ['pending', 'x1', 'x2', 'x3', 'confirmed_m', 'confirmed_wa', 'confirmed_c', 'cancelled'];
 const urgencyOptions = ['normal', 'urgent', 'hold'];
 const deliveryOptions = ['packaging', 'sent_to_courier', 'delivered', 'returned'];
 
@@ -103,9 +103,9 @@ export default function OrderDetailPage() {
       <button className="btn-plain" onClick={() => router.push(`/orders?updated=${Date.now()}`)} style={{ marginBottom: '1rem' }}>← Back to orders</button>
       <h1>{order.customer_name}</h1>
       <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap', marginBottom: '0.75rem' }}>
-        <span style={{ ...statusBadgeStyle(order.urgency_status), borderRadius: '999px', padding: '0.25rem 0.6rem', textTransform: 'capitalize', fontSize: '0.85rem' }}>{order.urgency_status}</span>
-        <span style={{ ...statusBadgeStyle(order.confirmation_status), borderRadius: '999px', padding: '0.25rem 0.6rem', textTransform: 'capitalize', fontSize: '0.85rem' }}>{order.confirmation_status}</span>
-        <span style={{ ...statusBadgeStyle(order.delivery_status), borderRadius: '999px', padding: '0.25rem 0.6rem', textTransform: 'capitalize', fontSize: '0.85rem' }}>{order.delivery_status}</span>
+        <span style={{ ...statusBadgeStyle(order.urgency_status), borderRadius: '999px', padding: '0.25rem 0.6rem', fontSize: '0.85rem' }}>{statusLabel(order.urgency_status)}</span>
+        <span style={{ ...statusBadgeStyle(order.confirmation_status), borderRadius: '999px', padding: '0.25rem 0.6rem', fontSize: '0.85rem' }}>{statusLabel(order.confirmation_status)}</span>
+        <span style={{ ...statusBadgeStyle(order.delivery_status), borderRadius: '999px', padding: '0.25rem 0.6rem', fontSize: '0.85rem' }}>{statusLabel(order.delivery_status)}</span>
       </div>
       <p>Created: {new Date(order.created_at).toLocaleString()}</p>
       <p>Phone: {order.phone}</p>
@@ -137,7 +137,7 @@ export default function OrderDetailPage() {
               onChange={(e) => updateField('confirmation_status', e.target.value)}
             >
               {confirmationSteps.map((step) => (
-                <option key={step} value={step}>{step}</option>
+                <option key={step} value={step}>{statusLabel(step)}</option>
               ))}
             </select>
             <button type="button" onClick={bumpConfirmation}>Bump</button>
@@ -152,7 +152,7 @@ export default function OrderDetailPage() {
             style={{ display: 'block', marginTop: '0.25rem' }}
           >
             {deliveryOptions.map((step) => (
-              <option key={step} value={step}>{step}</option>
+              <option key={step} value={step}>{statusLabel(step)}</option>
             ))}
           </select>
         </div>
@@ -165,7 +165,7 @@ export default function OrderDetailPage() {
             style={{ display: 'block', marginTop: '0.25rem' }}
           >
             {urgencyOptions.map((step) => (
-              <option key={step} value={step}>{step}</option>
+              <option key={step} value={step}>{statusLabel(step)}</option>
             ))}
           </select>
         </div>

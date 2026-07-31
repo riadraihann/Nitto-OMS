@@ -7,6 +7,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createClient } from '@supabase/supabase-js';
+import { defaultConfirmationStatus } from '../lib/orderDefaults.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const CSV_PATH = path.join(__dirname, '..', 'wjunw.csv');
@@ -240,7 +241,7 @@ function buildOrders() {
       phone,
       address,
       urgency_status: 'normal',
-      confirmation_status: 'confirmed',
+      confirmation_status: defaultConfirmationStatus(source, new Date(createdAt)),
       delivery_status: returnFlagged ? 'returned' : 'delivered',
       special_instructions: notes || null,
       cancel_return_reason: returnFlagged ? notes || null : null,

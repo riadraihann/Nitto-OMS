@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { supabaseAdmin } from '@/lib/supabase';
-import { statusBadgeStyle } from '@/lib/theme';
+import { statusBadgeStyle, statusLabel } from '@/lib/theme';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -149,10 +149,12 @@ export default async function OrdersPage({ searchParams }: OrdersPageProps) {
         <select name="confirmation_status" defaultValue={confirmation}>
           <option value="">All confirmations</option>
           <option value="pending">Pending</option>
-          <option value="x1">x1</option>
-          <option value="x2">x2</option>
-          <option value="x3">x3</option>
-          <option value="confirmed">Confirmed</option>
+          <option value="x1">X1</option>
+          <option value="x2">X2</option>
+          <option value="x3">X3</option>
+          <option value="confirmed_m">Confirmed (M)</option>
+          <option value="confirmed_wa">Confirmed (Wa)</option>
+          <option value="confirmed_c">Confirmed (C)</option>
           <option value="cancelled">Cancelled</option>
         </select>
         <select name="delivery_status" defaultValue={delivery}>
@@ -190,9 +192,9 @@ export default async function OrdersPage({ searchParams }: OrdersPageProps) {
                 <div style={{ textAlign: 'right' }}>
                   <div style={{ fontWeight: 700 }}>Total: ৳{subtotal.toFixed(2)}</div>
                   <div style={{ marginTop: '0.35rem', display: 'flex', gap: '0.35rem', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-                    <span style={{ ...statusBadgeStyle(order.urgency_status), borderRadius: '999px', padding: '0.25rem 0.6rem', textTransform: 'capitalize' }}>{order.urgency_status}</span>
-                    <span style={{ ...statusBadgeStyle(order.confirmation_status), borderRadius: '999px', padding: '0.25rem 0.6rem', textTransform: 'capitalize' }}>{order.confirmation_status}</span>
-                    <span style={{ ...statusBadgeStyle(order.delivery_status), borderRadius: '999px', padding: '0.25rem 0.6rem', textTransform: 'capitalize' }}>{order.delivery_status}</span>
+                    <span style={{ ...statusBadgeStyle(order.urgency_status), borderRadius: '999px', padding: '0.25rem 0.6rem' }}>{statusLabel(order.urgency_status)}</span>
+                    <span style={{ ...statusBadgeStyle(order.confirmation_status), borderRadius: '999px', padding: '0.25rem 0.6rem' }}>{statusLabel(order.confirmation_status)}</span>
+                    <span style={{ ...statusBadgeStyle(order.delivery_status), borderRadius: '999px', padding: '0.25rem 0.6rem' }}>{statusLabel(order.delivery_status)}</span>
                   </div>
                 </div>
               </div>
