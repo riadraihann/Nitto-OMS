@@ -16,7 +16,8 @@ type OrderRow = {
   id: number;
   order_number: string | null;
   customer_name: string;
-  urgency_status: string;
+  urgency_type: string;
+  urgency_target_date: string | null;
   confirmation_status: string;
   delivery_status: string;
   created_at: string;
@@ -47,7 +48,7 @@ export default async function OrdersPage({ searchParams }: OrdersPageProps) {
     );
   }
 
-  const urgency = getParam(searchParams?.urgency_status);
+  const urgency = getParam(searchParams?.urgency_type);
   const confirmation = getParam(searchParams?.confirmation_status);
   const delivery = getParam(searchParams?.delivery_status);
   const view = getParam(searchParams?.view);
@@ -59,7 +60,7 @@ export default async function OrdersPage({ searchParams }: OrdersPageProps) {
 
   let query = supabaseAdmin
     .from('orders')
-    .select('id, order_number, customer_name, urgency_status, confirmation_status, delivery_status, created_at, total_amount, order_items(sku, product_name, quantity, unit_price)')
+    .select('id, order_number, customer_name, urgency_type, urgency_target_date, confirmation_status, delivery_status, created_at, total_amount, order_items(sku, product_name, quantity, unit_price)')
     .order('created_at', { ascending: false });
 
   if (view === 'ready-for-delivery') {
@@ -68,7 +69,7 @@ export default async function OrdersPage({ searchParams }: OrdersPageProps) {
     query = query.eq('order_source', 'shopify').in('confirmation_status', CALL_PENDING_STAGES);
   } else {
     if (urgency) {
-      query = query.eq('urgency_status', urgency);
+      query = query.eq('urgency_type', urgency);
     }
     if (confirmation) {
       query = query.eq('confirmation_status', confirmation);
@@ -162,11 +163,13 @@ export default async function OrdersPage({ searchParams }: OrdersPageProps) {
         </label>
         {view !== 'call-pending' ? (
           <>
-            <select name="urgency_status" defaultValue={urgency}>
+            <select name="urgency_type" defaultValue={urgency}>
               <option value="">All urgencies</option>
               <option value="normal">Normal</option>
               <option value="urgent">Urgent</option>
               <option value="hold">Hold</option>
+              <option value="vu">VU (Very Urgent)</option>
+              <option value="d">D (Dispatch)</option>
             </select>
             <select name="confirmation_status" defaultValue={confirmation}>
               <option value="">All confirmations</option>

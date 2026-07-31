@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
+import { normalizeUrgencyFields } from '@/lib/urgencyTarget';
 
 export async function GET(request: Request) {
   if (!supabaseAdmin) {
@@ -34,7 +35,13 @@ export async function POST(request: Request) {
 
   try {
     const payload = await request.json();
-    const { items = [], ...orderData } = payload as { items?: Array<Record<string, unknown>>; [key: string]: unknown };
+    const { items = [], ...rawOrderData } = payload as { items?: Array<Record<string, unknown>>; [key: string]: unknown };
+
+    const normalized = normalizeUrgencyFields(rawOrderData);
+    if (!normalized.ok) {
+      return NextResponse.json({ ok: false, error: normalized.error }, { status: 400 });
+    }
+    const orderData = normalized.payload;
 
     const { data: order, error: orderError } = await supabaseAdmin
       .from('orders')
@@ -85,10 +92,15 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ ok: false, error: 'Order id is required' }, { status: 400 });
     }
 
-    const updatePayload = { ...payload };
-    delete updatePayload.id;
+    const rawUpdatePayload = { ...payload };
+    delete rawUpdatePayload.id;
 
-    const { data, error } = await supabaseAdmin.from('orders').update(updatePayload).eq('id', id).select().single();
+    const normalized = normalizeUrgencyFields(rawUpdatePayload);
+    if (!normalized.ok) {
+      return NextResponse.json({ ok: false, error: normalized.error }, { status: 400 });
+    }
+
+    const { data, error } = await supabaseAdmin.from('orders').update(normalized.payload).eq('id', id).select().single();
 
     if (error) {
       return NextResponse.json({ ok: false, error: error.message }, { status: 500 });

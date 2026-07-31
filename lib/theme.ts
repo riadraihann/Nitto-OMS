@@ -17,10 +17,12 @@ export const colors = {
 // The urgency badge below intentionally keeps its original red/yellow/green -- those are
 // warning colors, not part of the new brand palette, and must stay visually distinct.
 export const statusBadgeColors: Record<string, { background: string; color: string }> = {
-  // urgency_status
+  // urgency_type
   normal: { background: '#e8f5e9', color: '#2e7d32' },
   urgent: { background: '#ffebee', color: '#c62828' },
   hold: { background: '#fff8e1', color: '#ef6c00' },
+  vu: { background: '#ffebee', color: '#c62828' }, // same red as urgent, per spec
+  d: { background: '#e3f2fd', color: '#1565c0' }, // neutral/informational, not alarming
 
   // confirmation_status
   pending: { background: '#eef1f6', color: '#3d4a63' },
@@ -58,4 +60,31 @@ const statusLabels: Record<string, string> = {
 
 export function statusLabel(status: string): string {
   return statusLabels[status] ?? status.charAt(0).toUpperCase() + status.slice(1);
+}
+
+// shared option lists for the confirmation/delivery/urgency selects on both the order detail
+// page and the inline row editors on /orders
+export const confirmationSteps = ['pending', 'x1', 'x2', 'x3', 'confirmed_m', 'confirmed_wa', 'confirmed_c', 'cancelled'];
+export const deliveryOptions = ['packaging', 'sent_to_courier', 'delivered', 'returned'];
+export const urgencyTypeOptions = ['normal', 'urgent', 'hold', 'vu', 'd'];
+
+const urgencyTypeLabels: Record<string, string> = {
+  vu: 'VU (Very Urgent)',
+  d: 'D (Dispatch)',
+};
+
+// dropdown option text -- explains what vu/d mean, since the compact badge form doesn't
+export function urgencyTypeOptionLabel(type: string): string {
+  return urgencyTypeLabels[type] ?? statusLabel(type);
+}
+
+// badge/display text: "VU (05)" / "D (12)" using the day-of-month from the resolved target
+// date -- urgency_target_date is stored as a plain date (no time/tz), so read the day back
+// with getUTCDate() to avoid a local-timezone off-by-one
+export function urgencyLabel(type: string, targetDate: string | null): string {
+  if ((type === 'vu' || type === 'd') && targetDate) {
+    const day = new Date(targetDate).getUTCDate();
+    return `${type.toUpperCase()} (${String(day).padStart(2, '0')})`;
+  }
+  return statusLabel(type);
 }

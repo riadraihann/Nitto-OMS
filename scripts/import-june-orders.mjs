@@ -240,7 +240,7 @@ function buildOrders() {
       customer_name: customerName,
       phone,
       address,
-      urgency_status: 'normal',
+      urgency_type: 'normal',
       confirmation_status: defaultConfirmationStatus(source, new Date(createdAt)),
       delivery_status: returnFlagged ? 'returned' : 'delivered',
       special_instructions: notes || null,

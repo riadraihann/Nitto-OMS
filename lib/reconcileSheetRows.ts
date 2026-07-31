@@ -12,7 +12,7 @@ type ParsedRow = {
   cancel_return_reason: string | null;
   total_amount: number | null;
   items: { sku: string; product_name: string; quantity: number; unit_price: number }[];
-  defaults: { urgency_status: string; confirmation_status: string; delivery_status: string };
+  defaults: { urgency_type: string; confirmation_status: string; delivery_status: string };
 };
 
 export type ReconcileResult = {
@@ -34,7 +34,7 @@ export type ReconcileResult = {
 // never matched or touched here, even if an order_number happens to collide.
 //
 // Field ownership on UPDATE: only sheet-sourced fields are overwritten (name/phone/address/notes/
-// amount/items). urgency_status, confirmation_status, delivery_status, happiness_score and
+// amount/items). urgency_type, confirmation_status, delivery_status, happiness_score and
 // product_suggestions are staff-managed in the app and are left alone once an order exists.
 export async function reconcileSheetRows(rows: unknown[]): Promise<ReconcileResult> {
   if (!supabaseAdmin) {

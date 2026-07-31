@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { statusBadgeStyle, statusLabel } from '@/lib/theme';
+import { statusBadgeStyle, statusLabel, confirmationSteps, deliveryOptions, urgencyTypeOptions, urgencyTypeOptionLabel, urgencyLabel } from '@/lib/theme';
 
 type OrderItem = {
   id?: number;
@@ -20,7 +20,8 @@ type Order = {
   customer_name: string;
   phone: string;
   address: string;
-  urgency_status: string;
+  urgency_type: string;
+  urgency_target_date: string | null;
   confirmation_status: string;
   delivery_status: string;
   special_instructions: string | null;
@@ -31,10 +32,6 @@ type Order = {
   order_items?: OrderItem[];
 };
 
-const confirmationSteps = ['pending', 'x1', 'x2', 'x3', 'confirmed_m', 'confirmed_wa', 'confirmed_c', 'cancelled'];
-const urgencyOptions = ['normal', 'urgent', 'hold'];
-const deliveryOptions = ['packaging', 'sent_to_courier', 'delivered', 'returned'];
-
 export default function OrderDetailPage() {
   const params = useParams();
   const router = useRouter();
@@ -42,6 +39,9 @@ export default function OrderDetailPage() {
   const [order, setOrder] = useState<Order | null>(null);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
+  // set only while a vu/d type is picked but no day has been committed yet -- keeps the
+  // select showing the just-picked type even though nothing's saved
+  const [pendingUrgencyType, setPendingUrgencyType] = useState<string | null>(null);
 
   useEffect(() => {
     const loadOrder = async () => {
@@ -82,6 +82,58 @@ export default function OrderDetailPage() {
     setMessage('Saved');
   };
 
+  const saveUrgency = async (type: string, day?: number) => {
+    if (!order) return;
+    setSaving(true);
+    setMessage('');
+
+    const body: Record<string, unknown> = { id, urgency_type: type };
+    if (day !== undefined) body.urgency_target_day = day;
+
+    const response = await fetch(`/api/orders?id=${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const result = await response.json();
+    setSaving(false);
+
+    if (!response.ok) {
+      setMessage(result.error || 'Unable to save');
+      return;
+    }
+
+    setOrder((prev) => (prev ? { ...prev, urgency_type: result.data.urgency_type, urgency_target_date: result.data.urgency_target_date } : prev));
+    setPendingUrgencyType(null);
+    setMessage('Saved');
+  };
+
+  const handleUrgencyTypeChange = async (newType: string) => {
+    if (!order) return;
+    setPendingUrgencyType(newType);
+    setMessage('');
+
+    if (newType === 'vu' || newType === 'd') {
+      if (order.urgency_target_date) {
+        // carrying over an already-known day (e.g. switching vu <-> d) can save immediately
+        await saveUrgency(newType, new Date(order.urgency_target_date).getUTCDate());
+      }
+      // otherwise wait for the day-of-month input below
+      return;
+    }
+
+    await saveUrgency(newType);
+  };
+
+  const handleUrgencyDayCommit = async (rawDay: string) => {
+    const type = pendingUrgencyType ?? order?.urgency_type;
+    if (!type || (type !== 'vu' && type !== 'd')) return;
+    if (!rawDay.trim()) return;
+    const day = Number(rawDay);
+    if (!Number.isFinite(day)) return;
+    await saveUrgency(type, day);
+  };
+
   const bumpConfirmation = async () => {
     if (!order) return;
     const index = confirmationSteps.indexOf(order.confirmation_status);
@@ -102,7 +154,7 @@ export default function OrderDetailPage() {
       <div style={{ fontSize: '0.9rem', color: '#666' }}>{order.order_number ?? `Order #${order.id}`}</div>
       <h1>{order.customer_name}</h1>
       <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap', marginBottom: '0.75rem' }}>
-        <span style={{ ...statusBadgeStyle(order.urgency_status), borderRadius: '999px', padding: '0.25rem 0.6rem', fontSize: '0.85rem' }}>{statusLabel(order.urgency_status)}</span>
+        <span style={{ ...statusBadgeStyle(order.urgency_type), borderRadius: '999px', padding: '0.25rem 0.6rem', fontSize: '0.85rem' }}>{urgencyLabel(order.urgency_type, order.urgency_target_date)}</span>
         <span style={{ ...statusBadgeStyle(order.confirmation_status), borderRadius: '999px', padding: '0.25rem 0.6rem', fontSize: '0.85rem' }}>{statusLabel(order.confirmation_status)}</span>
         <span style={{ ...statusBadgeStyle(order.delivery_status), borderRadius: '999px', padding: '0.25rem 0.6rem', fontSize: '0.85rem' }}>{statusLabel(order.delivery_status)}</span>
       </div>
@@ -157,16 +209,30 @@ export default function OrderDetailPage() {
         </div>
 
         <div>
-          <label>Urgency status</label>
-          <select
-            value={order.urgency_status}
-            onChange={(e) => updateField('urgency_status', e.target.value)}
-            style={{ display: 'block', marginTop: '0.25rem' }}
-          >
-            {urgencyOptions.map((step) => (
-              <option key={step} value={step}>{statusLabel(step)}</option>
-            ))}
-          </select>
+          <label>Urgency</label>
+          <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.25rem', alignItems: 'center' }}>
+            <select
+              value={pendingUrgencyType ?? order.urgency_type}
+              onChange={(e) => handleUrgencyTypeChange(e.target.value)}
+            >
+              {urgencyTypeOptions.map((type) => (
+                <option key={type} value={type}>{urgencyTypeOptionLabel(type)}</option>
+              ))}
+            </select>
+            {(pendingUrgencyType ?? order.urgency_type) === 'vu' || (pendingUrgencyType ?? order.urgency_type) === 'd' ? (
+              <input
+                type="number"
+                min="1"
+                max="31"
+                placeholder="Day (1-31)"
+                key={order.urgency_target_date ?? 'unset'}
+                defaultValue={order.urgency_target_date ? new Date(order.urgency_target_date).getUTCDate() : ''}
+                onBlur={(e) => handleUrgencyDayCommit(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }}
+                style={{ width: '5.5rem' }}
+              />
+            ) : null}
+          </div>
         </div>
 
         <div>

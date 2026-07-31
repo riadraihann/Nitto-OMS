@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useState } from 'react';
-import { statusBadgeStyle, statusLabel } from '@/lib/theme';
+import { statusBadgeStyle, statusLabel, confirmationSteps, deliveryOptions, urgencyTypeOptions, urgencyTypeOptionLabel, urgencyLabel } from '@/lib/theme';
 
 type OrderItem = {
   sku: string;
@@ -15,7 +15,8 @@ type OrderRow = {
   id: number;
   order_number: string | null;
   customer_name: string;
-  urgency_status: string;
+  urgency_type: string;
+  urgency_target_date: string | null;
   confirmation_status: string;
   delivery_status: string;
   created_at: string;
@@ -23,10 +24,95 @@ type OrderRow = {
   order_items: OrderItem[];
 };
 
-export default function OrdersList({ orders }: { orders: OrderRow[] }) {
+export default function OrdersList({ orders: initialOrders }: { orders: OrderRow[] }) {
+  const [orders, setOrders] = useState(initialOrders);
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [exporting, setExporting] = useState(false);
   const [exportError, setExportError] = useState('');
+  const [savingIds, setSavingIds] = useState<Set<number>>(new Set());
+  const [rowErrors, setRowErrors] = useState<Record<number, string>>({});
+  // set only while a vu/d type is picked for a row but no day has been committed yet
+  const [pendingUrgencyType, setPendingUrgencyType] = useState<Record<number, string>>({});
+
+  const updateField = async (orderId: number, field: 'confirmation_status' | 'delivery_status', value: string) => {
+    const previous = orders.find((o) => o.id === orderId)?.[field];
+    setOrders((prev) => prev.map((o) => (o.id === orderId ? { ...o, [field]: value } : o)));
+    setSavingIds((prev) => new Set(prev).add(orderId));
+    setRowErrors((prev) => { const next = { ...prev }; delete next[orderId]; return next; });
+
+    try {
+      const response = await fetch(`/api/orders?id=${orderId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: orderId, [field]: value }),
+      });
+      const result = await response.json();
+
+      if (!response.ok) {
+        setOrders((prev) => prev.map((o) => (o.id === orderId ? { ...o, [field]: previous ?? o[field] } : o)));
+        setRowErrors((prev) => ({ ...prev, [orderId]: result.error || 'Unable to save' }));
+      }
+    } catch {
+      setOrders((prev) => prev.map((o) => (o.id === orderId ? { ...o, [field]: previous ?? o[field] } : o)));
+      setRowErrors((prev) => ({ ...prev, [orderId]: 'Unable to save' }));
+    } finally {
+      setSavingIds((prev) => { const next = new Set(prev); next.delete(orderId); return next; });
+    }
+  };
+
+  const saveUrgency = async (orderId: number, type: string, day?: number) => {
+    setSavingIds((prev) => new Set(prev).add(orderId));
+    setRowErrors((prev) => { const next = { ...prev }; delete next[orderId]; return next; });
+
+    try {
+      const body: Record<string, unknown> = { id: orderId, urgency_type: type };
+      if (day !== undefined) body.urgency_target_day = day;
+
+      const response = await fetch(`/api/orders?id=${orderId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      const result = await response.json();
+
+      if (!response.ok) {
+        setRowErrors((prev) => ({ ...prev, [orderId]: result.error || 'Unable to save' }));
+        return;
+      }
+
+      setOrders((prev) => prev.map((o) => (o.id === orderId ? { ...o, urgency_type: result.data.urgency_type, urgency_target_date: result.data.urgency_target_date } : o)));
+      setPendingUrgencyType((prev) => { const next = { ...prev }; delete next[orderId]; return next; });
+    } catch {
+      setRowErrors((prev) => ({ ...prev, [orderId]: 'Unable to save' }));
+    } finally {
+      setSavingIds((prev) => { const next = new Set(prev); next.delete(orderId); return next; });
+    }
+  };
+
+  const handleUrgencyTypeChange = (orderId: number, newType: string) => {
+    setPendingUrgencyType((prev) => ({ ...prev, [orderId]: newType }));
+    setRowErrors((prev) => { const next = { ...prev }; delete next[orderId]; return next; });
+
+    const order = orders.find((o) => o.id === orderId);
+    if (!order) return;
+
+    if (newType === 'vu' || newType === 'd') {
+      if (order.urgency_target_date) {
+        saveUrgency(orderId, newType, new Date(order.urgency_target_date).getUTCDate());
+      }
+      // otherwise wait for the day-of-month input
+      return;
+    }
+
+    saveUrgency(orderId, newType);
+  };
+
+  const handleUrgencyDayCommit = (orderId: number, type: string, rawDay: string) => {
+    if (!rawDay.trim()) return;
+    const day = Number(rawDay);
+    if (!Number.isFinite(day)) return;
+    saveUrgency(orderId, type, day);
+  };
 
   const allSelected = orders.length > 0 && selected.size === orders.length;
 
@@ -97,11 +183,12 @@ export default function OrdersList({ orders }: { orders: OrderRow[] }) {
           const itemSummary = (order.order_items ?? []).map((item) => `${item.quantity} × ${item.sku || item.product_name}`).join(', ');
           const computedSubtotal = (order.order_items ?? []).reduce((sum, item) => sum + item.quantity * item.unit_price, 0);
           const subtotal = order.total_amount ?? computedSubtotal;
-          const rowStyle = order.urgency_status === 'urgent'
+          const rowStyle = order.urgency_type === 'urgent' || order.urgency_type === 'vu'
             ? { backgroundColor: '#ffe6e6' }
-            : order.urgency_status === 'hold'
+            : order.urgency_type === 'hold'
               ? { backgroundColor: '#fff7d6' }
               : { backgroundColor: '#fff' };
+          const displayedUrgencyType = pendingUrgencyType[order.id] ?? order.urgency_type;
 
           return (
             <article key={order.id} style={{ ...rowStyle, border: '1px solid #e5e7eb', borderRadius: '12px', padding: '1rem', display: 'flex', gap: '0.75rem' }}>
@@ -120,16 +207,68 @@ export default function OrdersList({ orders }: { orders: OrderRow[] }) {
                   </div>
                   <div style={{ textAlign: 'right' }}>
                     <div style={{ fontWeight: 700 }}>Total: ৳{subtotal.toFixed(2)}</div>
-                    <div style={{ marginTop: '0.35rem', display: 'flex', gap: '0.35rem', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-                      <span style={{ ...statusBadgeStyle(order.urgency_status), borderRadius: '999px', padding: '0.25rem 0.6rem' }}>{statusLabel(order.urgency_status)}</span>
-                      <span style={{ ...statusBadgeStyle(order.confirmation_status), borderRadius: '999px', padding: '0.25rem 0.6rem' }}>{statusLabel(order.confirmation_status)}</span>
-                      <span style={{ ...statusBadgeStyle(order.delivery_status), borderRadius: '999px', padding: '0.25rem 0.6rem' }}>{statusLabel(order.delivery_status)}</span>
+                    <div style={{ marginTop: '0.35rem' }}>
+                      <span style={{ ...statusBadgeStyle(order.urgency_type), borderRadius: '999px', padding: '0.25rem 0.6rem' }}>{urgencyLabel(order.urgency_type, order.urgency_target_date)}</span>
                     </div>
                   </div>
                 </div>
 
                 <div style={{ marginTop: '0.75rem', color: '#374151' }}>
                   <strong>Items:</strong> {itemSummary || 'No items'}
+                </div>
+
+                <div style={{ marginTop: '0.75rem', display: 'flex', gap: '0.75rem', flexWrap: 'wrap', alignItems: 'center' }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.85rem' }}>
+                    Urgency
+                    <select
+                      value={displayedUrgencyType}
+                      onChange={(e) => handleUrgencyTypeChange(order.id, e.target.value)}
+                      style={{ ...statusBadgeStyle(displayedUrgencyType), border: 'none', borderRadius: '999px', padding: '0.25rem 0.6rem' }}
+                    >
+                      {urgencyTypeOptions.map((type) => (
+                        <option key={type} value={type}>{urgencyTypeOptionLabel(type)}</option>
+                      ))}
+                    </select>
+                  </label>
+                  {displayedUrgencyType === 'vu' || displayedUrgencyType === 'd' ? (
+                    <input
+                      type="number"
+                      min="1"
+                      max="31"
+                      placeholder="Day (1-31)"
+                      key={`${order.id}-${order.urgency_target_date ?? 'unset'}`}
+                      defaultValue={order.urgency_target_date ? new Date(order.urgency_target_date).getUTCDate() : ''}
+                      onBlur={(e) => handleUrgencyDayCommit(order.id, displayedUrgencyType, e.target.value)}
+                      onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }}
+                      style={{ width: '5.5rem', fontSize: '0.85rem' }}
+                    />
+                  ) : null}
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.85rem' }}>
+                    Confirmation
+                    <select
+                      value={order.confirmation_status}
+                      onChange={(e) => updateField(order.id, 'confirmation_status', e.target.value)}
+                      style={{ ...statusBadgeStyle(order.confirmation_status), border: 'none', borderRadius: '999px', padding: '0.25rem 0.6rem' }}
+                    >
+                      {confirmationSteps.map((step) => (
+                        <option key={step} value={step}>{statusLabel(step)}</option>
+                      ))}
+                    </select>
+                  </label>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.85rem' }}>
+                    Delivery
+                    <select
+                      value={order.delivery_status}
+                      onChange={(e) => updateField(order.id, 'delivery_status', e.target.value)}
+                      style={{ ...statusBadgeStyle(order.delivery_status), border: 'none', borderRadius: '999px', padding: '0.25rem 0.6rem' }}
+                    >
+                      {deliveryOptions.map((step) => (
+                        <option key={step} value={step}>{statusLabel(step)}</option>
+                      ))}
+                    </select>
+                  </label>
+                  {savingIds.has(order.id) ? <span style={{ fontSize: '0.8rem', color: '#666' }}>Saving...</span> : null}
+                  {rowErrors[order.id] ? <span style={{ fontSize: '0.8rem', color: '#c62828' }}>{rowErrors[order.id]}</span> : null}
                 </div>
 
                 <div style={{ marginTop: '0.75rem' }}>

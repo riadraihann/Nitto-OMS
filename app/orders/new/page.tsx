@@ -3,6 +3,7 @@
 import { FormEvent, useState, type ChangeEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import { defaultConfirmationStatus } from '@/lib/orderDefaults.mjs';
+import { urgencyTypeOptions, urgencyTypeOptionLabel } from '@/lib/theme';
 
 type OrderItemInput = {
   sku: string;
@@ -16,7 +17,8 @@ type OrderFormState = {
   customer_name: string;
   phone: string;
   address: string;
-  urgency_status: string;
+  urgency_type: string;
+  urgency_target_day: string;
   confirmation_status: string;
   delivery_status: string;
   special_instructions: string;
@@ -30,7 +32,8 @@ const initialState: OrderFormState = {
   customer_name: '',
   phone: '',
   address: '',
-  urgency_status: 'normal',
+  urgency_type: 'normal',
+  urgency_target_day: '',
   confirmation_status: defaultConfirmationStatus('shopify', new Date()),
   delivery_status: 'packaging',
   special_instructions: '',
@@ -84,8 +87,10 @@ export default function NewOrderPage() {
     setSubmitting(true);
     setMessage('');
 
+    const { urgency_target_day, ...restForm } = form;
     const payload = {
-      ...form,
+      ...restForm,
+      ...((form.urgency_type === 'vu' || form.urgency_type === 'd') ? { urgency_target_day } : {}),
       happiness_score: form.happiness_score === '' ? null : Number(form.happiness_score),
       items: items
         .filter((item) => item.sku.trim() || item.product_name.trim())
@@ -184,13 +189,32 @@ export default function NewOrderPage() {
         </div>
 
         <label>
-          Urgency status
-          <select name="urgency_status" value={form.urgency_status} onChange={handleChange}>
-            <option value="normal">Normal</option>
-            <option value="urgent">Urgent</option>
-            <option value="hold">Hold</option>
+          Urgency
+          <select name="urgency_type" value={form.urgency_type} onChange={handleChange}>
+            {urgencyTypeOptions.map((type) => (
+              <option key={type} value={type}>{urgencyTypeOptionLabel(type)}</option>
+            ))}
           </select>
         </label>
+
+        {form.urgency_type === 'vu' || form.urgency_type === 'd' ? (
+          <label>
+            Day of month (1-31)
+            <input
+              type="number"
+              min="1"
+              max="31"
+              name="urgency_target_day"
+              value={form.urgency_target_day}
+              onChange={handleChange}
+              required
+            />
+            <span style={{ display: 'block', fontSize: '0.8rem', color: '#666', marginTop: '0.15rem' }}>
+              {form.urgency_type === 'vu' ? 'Must ship by this day.' : 'Dispatch on this day.'} If that day has already
+              passed this month, it resolves to next month automatically.
+            </span>
+          </label>
+        ) : null}
 
         <label>
           Confirmation status
