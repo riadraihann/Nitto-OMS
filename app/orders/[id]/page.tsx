@@ -39,6 +39,7 @@ type Order = {
   happiness_score: number | null;
   product_suggestions: string | null;
   total_amount: number | null;
+  archived_at: string | null;
   order_items?: OrderItem[];
 };
 
@@ -184,6 +185,18 @@ export default function OrderDetailPage() {
     return value;
   };
 
+  const toggleArchived = async () => {
+    if (!order) return;
+    const archiving = !order.archived_at;
+    const confirmed = window.confirm(
+      archiving
+        ? 'Archive this order? It will be hidden from normal views but can be restored anytime.'
+        : 'Restore this order back into normal views?',
+    );
+    if (!confirmed) return;
+    await updateField('archived_at', archiving ? new Date().toISOString() : null);
+  };
+
   const bumpConfirmation = async () => {
     if (!order) return;
     const index = confirmationSteps.indexOf(order.confirmation_status);
@@ -200,13 +213,23 @@ export default function OrderDetailPage() {
 
   return (
     <main style={{ maxWidth: 960, margin: '2rem auto', padding: '0 1rem' }}>
-      <button className="btn-plain" onClick={() => router.push(`/orders?updated=${Date.now()}`)} style={{ marginBottom: '1rem' }}>← Back to orders</button>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '1rem' }}>
+        <button className="btn-plain" onClick={() => router.push(`/orders?updated=${Date.now()}`)} style={{ marginBottom: '1rem' }}>← Back to orders</button>
+        <button type="button" className="btn-plain" onClick={toggleArchived} disabled={saving}>
+          {order.archived_at ? 'Restore order' : 'Archive order'}
+        </button>
+      </div>
       <div style={{ fontSize: '0.9rem', color: '#666' }}>{order.order_number ?? `Order #${order.id}`}</div>
       <h1>{order.customer_name}</h1>
       <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap', marginBottom: '0.75rem' }}>
         <span style={{ ...statusBadgeStyle(order.urgency_type), borderRadius: '999px', padding: '0.25rem 0.6rem', fontSize: '0.85rem' }}>{urgencyLabel(order.urgency_type, order.urgency_target_date)}</span>
         <span style={{ ...statusBadgeStyle(order.confirmation_status), borderRadius: '999px', padding: '0.25rem 0.6rem', fontSize: '0.85rem' }}>{statusLabel(order.confirmation_status)}</span>
         <span style={{ ...statusBadgeStyle(order.delivery_status), borderRadius: '999px', padding: '0.25rem 0.6rem', fontSize: '0.85rem' }}>{statusLabel(order.delivery_status)}</span>
+        {order.archived_at ? (
+          <span style={{ background: '#f0f0f0', color: '#616161', borderRadius: '999px', padding: '0.25rem 0.6rem', fontSize: '0.85rem' }}>
+            Archived {new Date(order.archived_at).toLocaleDateString()}
+          </span>
+        ) : null}
       </div>
       <p>Created: {new Date(order.created_at).toLocaleString()}</p>
       <p>Phone: <a href={telHref(order.phone)}>{order.phone}</a></p>

@@ -25,6 +25,7 @@ type OrderRow = {
   delivery_status: string;
   created_at: string;
   total_amount: number | null;
+  archived_at: string | null;
   order_items: OrderItem[];
 };
 
@@ -61,22 +62,29 @@ export default async function OrdersPage({ searchParams }: OrdersPageProps) {
 
   let query = supabaseAdmin
     .from('orders')
-    .select('id, order_number, customer_name, phone, address, urgency_type, urgency_target_date, confirmation_status, delivery_status, created_at, total_amount, order_items(sku, product_name, quantity, unit_price)')
+    .select('id, order_number, customer_name, phone, address, urgency_type, urgency_target_date, confirmation_status, delivery_status, created_at, total_amount, archived_at, order_items(sku, product_name, quantity, unit_price)')
     .order('created_at', { ascending: false });
 
-  if (view === 'ready-for-delivery') {
-    query = query.in('delivery_status', ['sent_to_courier', 'delivered']);
-  } else if (view === 'call-pending') {
-    query = query.eq('order_source', 'shopify').in('confirmation_status', CALL_PENDING_STAGES);
+  if (view === 'archived') {
+    // the one view that's ABOUT archived orders -- everywhere else excludes them
+    query = query.not('archived_at', 'is', null);
   } else {
-    if (urgency) {
-      query = query.eq('urgency_type', urgency);
-    }
-    if (confirmation) {
-      query = query.eq('confirmation_status', confirmation);
-    }
-    if (delivery) {
-      query = query.eq('delivery_status', delivery);
+    query = query.is('archived_at', null);
+
+    if (view === 'ready-for-delivery') {
+      query = query.in('delivery_status', ['sent_to_courier', 'delivered']);
+    } else if (view === 'call-pending') {
+      query = query.eq('order_source', 'shopify').in('confirmation_status', CALL_PENDING_STAGES);
+    } else {
+      if (urgency) {
+        query = query.eq('urgency_type', urgency);
+      }
+      if (confirmation) {
+        query = query.eq('confirmation_status', confirmation);
+      }
+      if (delivery) {
+        query = query.eq('delivery_status', delivery);
+      }
     }
   }
 
@@ -147,6 +155,9 @@ export default async function OrdersPage({ searchParams }: OrdersPageProps) {
         <Link href={buildHref({ view: 'call-pending' })} className={`nav-pill${view === 'call-pending' ? ' active' : ''}`}>
           Call Pending
         </Link>
+        <Link href={buildHref({ view: 'archived' })} className={`nav-pill${view === 'archived' ? ' active' : ''}`}>
+          Archived
+        </Link>
         <Link href="/reports/products-by-date" className="nav-pill">
           Products by date report
         </Link>
@@ -162,7 +173,7 @@ export default async function OrdersPage({ searchParams }: OrdersPageProps) {
           To
           <input type="date" name="date_to" defaultValue={dateTo} />
         </label>
-        {view !== 'call-pending' ? (
+        {view !== 'call-pending' && view !== 'archived' ? (
           <>
             <select name="urgency_type" defaultValue={urgency}>
               <option value="">All urgencies</option>

@@ -23,6 +23,7 @@ type OrderRow = {
   delivery_status: string;
   created_at: string;
   total_amount: number | null;
+  archived_at: string | null;
   order_items: OrderItem[];
 };
 
@@ -47,6 +48,9 @@ export default function OrdersList({ orders: initialOrders, view }: { orders: Or
   const [syncing, setSyncing] = useState(false);
   const [syncMessage, setSyncMessage] = useState('');
   const [syncError, setSyncError] = useState('');
+  const [archivingIds, setArchivingIds] = useState<Set<number>>(new Set());
+  const [bulkArchiving, setBulkArchiving] = useState(false);
+  const [bulkArchiveError, setBulkArchiveError] = useState('');
 
   const syncNow = async () => {
     setSyncing(true);
@@ -106,6 +110,75 @@ export default function OrdersList({ orders: initialOrders, view }: { orders: Or
       setRowErrors((prev) => ({ ...prev, [orderId]: 'Unable to save' }));
     } finally {
       setSavingIds((prev) => { const next = new Set(prev); next.delete(orderId); return next; });
+    }
+  };
+
+  const archiveOne = async (orderId: number, archive: boolean) => {
+    const label = orders.find((o) => o.id === orderId)?.customer_name ?? `order ${orderId}`;
+    const confirmed = window.confirm(archive ? `Archive ${label}? It'll be hidden from normal views but can be restored anytime.` : `Restore ${label} back into normal views?`);
+    if (!confirmed) return;
+
+    setArchivingIds((prev) => new Set(prev).add(orderId));
+    setRowErrors((prev) => { const next = { ...prev }; delete next[orderId]; return next; });
+
+    try {
+      const response = await fetch(`/api/orders?id=${orderId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: orderId, archived_at: archive ? new Date().toISOString() : null }),
+      });
+      const result = await response.json();
+
+      if (!response.ok) {
+        setRowErrors((prev) => ({ ...prev, [orderId]: result.error || 'Unable to save' }));
+        return;
+      }
+
+      // archiving hides a row from every non-archived view; restoring hides it from the
+      // Archived view -- either way, whichever view is currently open no longer wants it
+      setOrders((prev) => prev.filter((o) => o.id !== orderId));
+      setSelected((prev) => { const next = new Set(prev); next.delete(orderId); return next; });
+    } catch {
+      setRowErrors((prev) => ({ ...prev, [orderId]: 'Unable to save' }));
+    } finally {
+      setArchivingIds((prev) => { const next = new Set(prev); next.delete(orderId); return next; });
+    }
+  };
+
+  const bulkArchive = async (archive: boolean) => {
+    if (selected.size === 0) return;
+    const count = selected.size;
+    const confirmed = window.confirm(
+      archive
+        ? `Archive ${count} selected order${count === 1 ? '' : 's'}? They'll be hidden from normal views but can be restored anytime.`
+        : `Restore ${count} selected order${count === 1 ? '' : 's'} back into normal views?`,
+    );
+    if (!confirmed) return;
+
+    setBulkArchiving(true);
+    setBulkArchiveError('');
+
+    try {
+      const ids = Array.from(selected);
+      const response = await fetch('/api/orders/bulk-archive', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids, archive }),
+      });
+      const result = await response.json();
+
+      if (!response.ok || !result.ok) {
+        setBulkArchiveError(result.error || 'Bulk action failed');
+        return;
+      }
+
+      const updated = new Set<number>(result.updatedIds);
+      setOrders((prev) => prev.filter((o) => !updated.has(o.id)));
+      setSelected(new Set());
+    } catch {
+      setBulkArchiveError('Bulk action failed');
+    } finally {
+      setBulkArchiving(false);
     }
   };
 
@@ -230,6 +303,10 @@ export default function OrdersList({ orders: initialOrders, view }: { orders: Or
           {exporting ? 'Exporting...' : 'Export Selected'}
         </button>
         {exportError ? <span style={{ color: '#c62828', fontSize: '0.9rem' }}>{exportError}</span> : null}
+        <button type="button" onClick={() => bulkArchive(view !== 'archived')} disabled={selected.size === 0 || bulkArchiving}>
+          {bulkArchiving ? 'Working...' : view === 'archived' ? 'Restore Selected' : 'Archive Selected'}
+        </button>
+        {bulkArchiveError ? <span style={{ color: '#c62828', fontSize: '0.9rem' }}>{bulkArchiveError}</span> : null}
         <button type="button" onClick={syncNow} disabled={syncing} style={{ marginLeft: 'auto' }}>
           {syncing ? 'Syncing...' : 'Sync Now'}
         </button>
@@ -335,8 +412,19 @@ export default function OrdersList({ orders: initialOrders, view }: { orders: Or
                   {rowWarnings[order.id] ? <span style={{ fontSize: '0.8rem', color: '#ef6c00' }}>{rowWarnings[order.id]}</span> : null}
                 </div>
 
-                <div style={{ marginTop: '0.75rem' }}>
+                <div style={{ marginTop: '0.75rem', display: 'flex', gap: '1rem', alignItems: 'center', flexWrap: 'wrap' }}>
                   <Link href={`/orders/${order.id}`} style={{ color: '#a83aa3', fontWeight: 600 }}>Open order →</Link>
+                  <button
+                    type="button"
+                    className="btn-plain"
+                    onClick={() => archiveOne(order.id, !order.archived_at)}
+                    disabled={archivingIds.has(order.id)}
+                  >
+                    {archivingIds.has(order.id) ? 'Working...' : order.archived_at ? 'Restore' : 'Archive'}
+                  </button>
+                  {order.archived_at ? (
+                    <span style={{ color: '#666', fontSize: '0.8rem' }}>Archived {new Date(order.archived_at).toLocaleString()}</span>
+                  ) : null}
                 </div>
               </div>
             </article>
