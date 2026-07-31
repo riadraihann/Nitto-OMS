@@ -9,13 +9,15 @@ type ParsedRow = {
   phone: string;
   address: string;
   total_amount: number | null;
+  special_instructions: string | null;
+  cancel_return_reason: string | null;
   items: { sku: string; product_name: string; quantity: number; unit_price: number }[];
   parsedUrgencyType: string;
   parsedUrgencyTargetDate: string | null;
   urgencyMalformed: boolean;
-  parsedConfirmationStatus: string | null;
+  parsedConfirmationStatus: string;
   columnCWarnings: string[];
-  defaults: { urgency_type: string; confirmation_status: string; delivery_status: string };
+  defaults: { urgency_type: string; delivery_status: string };
 };
 
 type ExistingOrder = {
@@ -27,6 +29,8 @@ type ExistingOrder = {
   phone: string;
   address: string;
   total_amount: number | null;
+  special_instructions: string | null;
+  cancel_return_reason: string | null;
   created_at: string;
   order_source: string;
   sheet_row_number: number | null;
@@ -53,6 +57,8 @@ function scalarFieldsChanged(sheetOwnedFields: Record<string, unknown>, sheetRow
     sheetOwnedFields.phone !== existing.phone ||
     sheetOwnedFields.address !== existing.address ||
     sheetOwnedFields.total_amount !== existing.total_amount ||
+    sheetOwnedFields.special_instructions !== existing.special_instructions ||
+    sheetOwnedFields.cancel_return_reason !== existing.cancel_return_reason ||
     sheetOwnedFields.order_source !== existing.order_source ||
     sheetRowNumber !== existing.sheet_row_number ||
     new Date(sheetOwnedFields.created_at as string).getTime() !== new Date(existing.created_at).getTime()
@@ -128,7 +134,7 @@ export async function reconcileSheetRows(rows: unknown[]): Promise<ReconcileResu
     const chunk = orderNumbers.slice(i, i + LOOKUP_CHUNK);
     const { data, error } = await supabaseAdmin
       .from('orders')
-      .select('id, order_number, confirmation_status, urgency_type, urgency_target_date, customer_name, phone, address, total_amount, created_at, order_source, sheet_row_number, order_items(product_name, quantity)')
+      .select('id, order_number, confirmation_status, urgency_type, urgency_target_date, customer_name, phone, address, total_amount, special_instructions, cancel_return_reason, created_at, order_source, sheet_row_number, order_items(product_name, quantity)')
       .in('order_number', chunk)
       .not('synced_from_sheet_at', 'is', null);
 
@@ -163,10 +169,10 @@ export async function reconcileSheetRows(rows: unknown[]): Promise<ReconcileResu
     if (existing) {
       const update: Record<string, unknown> = {};
 
-      // confirmation: apply only if parsed cleanly AND actually differs (loop prevention)
-      if (parsedConfirmationStatus === null) {
-        warnings.push({ order_number: orderNumber, message: 'confirmation marker unrecognized -- left unchanged' });
-      } else if (parsedConfirmationStatus !== existing.confirmation_status) {
+      // confirmation: apply only if it actually differs (loop prevention) -- parseColumnC
+      // always resolves to a definite status (defaulting to 'pending' if no marker is found),
+      // so there's no "unrecognized, leave alone" case for this piece specifically
+      if (parsedConfirmationStatus !== existing.confirmation_status) {
         update.confirmation_status = parsedConfirmationStatus;
       }
 
@@ -224,16 +230,13 @@ export async function reconcileSheetRows(rows: unknown[]): Promise<ReconcileResu
 
       updated += 1;
     } else {
-      if (parsedConfirmationStatus === null) {
-        warnings.push({ order_number: orderNumber, message: 'confirmation marker unrecognized on new order -- used the default instead' });
-      }
       if (urgencyMalformed) {
         warnings.push({ order_number: orderNumber, message: 'urgency marker malformed on new order -- used the default instead' });
       }
 
       const insertRow = {
         ...sheetOwnedFields,
-        confirmation_status: parsedConfirmationStatus ?? defaults.confirmation_status,
+        confirmation_status: parsedConfirmationStatus,
         urgency_type: urgencyMalformed ? defaults.urgency_type : parsedUrgencyType,
         urgency_target_date: urgencyMalformed ? null : parsedUrgencyTargetDate,
         delivery_status: defaults.delivery_status,
