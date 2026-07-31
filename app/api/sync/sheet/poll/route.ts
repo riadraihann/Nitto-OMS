@@ -3,7 +3,10 @@ import { JWT } from 'google-auth-library';
 import { reconcileSheetRows } from '@/lib/reconcileSheetRows';
 
 const SHEET_ID = '1onvRBeDzZ63vwSCONjA2bpD7X10Npd94KuicJxQpRo4';
-const SHEET_TAB = 'Real Todays';
+// gid from the sheet URL the "Real Todays" tab was shared as (...#gid=1828206401) -- matching
+// by this numeric id is unambiguous, unlike matching by title (the actual tab title on this
+// spreadsheet turned out not to literally be "Real Todays")
+const SHEET_GID = 1828206401;
 
 // Independent backstop for the push-based webhook (app/api/sync/sheet/route.ts): hit on a
 // schedule (Vercel Cron, or an external scheduler) by whoever calls this route. Pulls the
@@ -43,22 +46,22 @@ export async function GET(request: Request) {
   });
 
   // Google's "Unable to parse range" error fires both for genuinely malformed A1 syntax and
-  // for a sheet name that doesn't exist -- so instead of hardcoding the tab name into the
-  // range, look it up by title first. A mismatch then surfaces every real tab name in the
-  // error, rather than an opaque parse failure.
+  // for a sheet name that doesn't exist -- so instead of hardcoding a tab title into the
+  // range, resolve the tab by its numeric gid (unambiguous, unlike title) first.
   let actualTitle: string;
   try {
-    const metaUrl = `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}?fields=sheets.properties.title`;
-    const metaResponse = await auth.request<{ sheets?: { properties?: { title?: string } }[] }>({ url: metaUrl });
-    const titles = (metaResponse.data.sheets ?? []).map((s) => s.properties?.title).filter((t): t is string => Boolean(t));
-    const match = titles.find((t) => t.trim().toLowerCase() === SHEET_TAB.trim().toLowerCase());
-    if (!match) {
+    const metaUrl = `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}?fields=sheets.properties`;
+    const metaResponse = await auth.request<{ sheets?: { properties?: { title?: string; sheetId?: number } }[] }>({ url: metaUrl });
+    const sheets = metaResponse.data.sheets ?? [];
+    const match = sheets.find((s) => s.properties?.sheetId === SHEET_GID);
+    if (!match?.properties?.title) {
+      const known = sheets.map((s) => `${s.properties?.title} (gid=${s.properties?.sheetId})`).join(', ');
       return NextResponse.json(
-        { ok: false, error: `No tab named "${SHEET_TAB}" found. Actual tabs on this spreadsheet: ${titles.join(', ') || '(none readable)'}` },
+        { ok: false, error: `No tab with gid=${SHEET_GID} found. Known tabs: ${known || '(none readable)'}` },
         { status: 502 }
       );
     }
-    actualTitle = match;
+    actualTitle = match.properties.title;
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error';
     return NextResponse.json({ ok: false, error: `Sheets API metadata request failed: ${message}` }, { status: 502 });

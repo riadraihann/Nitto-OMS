@@ -1,5 +1,6 @@
-// Nitto OMS sheet sync -- paste this into a bound Apps Script project on the "Real Todays"
-// spreadsheet (Extensions > Apps Script). One-way, Sheet -> App only.
+// Nitto OMS sheet sync -- paste this into a bound Apps Script project on the order-tracking
+// spreadsheet (Extensions > Apps Script). One-way, Sheet -> App only. Targets a specific tab
+// by gid (see SHEET_GID below), not by name -- this spreadsheet has ~50 similarly-named tabs.
 //
 // Setup (do this once):
 //   1. Extensions > Apps Script, paste this whole file in as Code.gs (replacing the default).
@@ -11,17 +12,27 @@
 //   4. Confirm it worked: Triggers (clock icon, left sidebar) should now show two triggers,
 //      "onEditInstallable" and "onChangeInstallable", both on this spreadsheet.
 //
-// To test: edit any cell in the "Real Todays" tab, then check Executions (left sidebar) for a
+// To test: edit any cell in the target tab, then check Executions (left sidebar) for a
 // run of onEditInstallable with a 200 response logged.
 
 var WEBHOOK_URL = 'https://nitto-oms.vercel.app/api/sync/sheet';
-var SHEET_NAME = 'Real Todays';
+// gid from the tab's URL (...#gid=1828206401) -- matching by this numeric id is unambiguous,
+// unlike matching by title (this spreadsheet has ~50 tabs, several with similar names)
+var SHEET_GID = 1828206401;
+
+function getTargetSheet_() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheets = ss.getSheets();
+  for (var i = 0; i < sheets.length; i++) {
+    if (sheets[i].getSheetId() === SHEET_GID) return sheets[i];
+  }
+  return null;
+}
 
 function syncToApp() {
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
-  var sheet = ss.getSheetByName(SHEET_NAME);
+  var sheet = getTargetSheet_();
   if (!sheet) {
-    Logger.log('Sheet "%s" not found, skipping sync', SHEET_NAME);
+    Logger.log('No sheet with gid=%s found, skipping sync', SHEET_GID);
     return;
   }
 
@@ -49,13 +60,13 @@ function syncToApp() {
 // Simple onEdit(e) functions can't call UrlFetchApp, hence installing this explicitly.
 function onEditInstallable(e) {
   if (!e || !e.range) return;
-  if (e.range.getSheet().getName() !== SHEET_NAME) return;
+  if (e.range.getSheet().getSheetId() !== SHEET_GID) return;
   syncToApp();
 }
 
 // Installable onChange: catches structural changes (rows/columns inserted or deleted, sorting,
 // paste operations) that onEdit misses. onChange doesn't reliably report which sheet changed,
-// so it just re-syncs "Real Todays" unconditionally on any change to this spreadsheet.
+// so it just re-syncs the target tab unconditionally on any change to this spreadsheet.
 function onChangeInstallable(e) {
   syncToApp();
 }
