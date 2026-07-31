@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { supabaseAdmin } from '@/lib/supabase';
-import { statusBadgeStyle, statusLabel } from '@/lib/theme';
+import OrdersList from './OrdersList';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -206,46 +206,7 @@ export default async function OrdersPage({ searchParams }: OrdersPageProps) {
         </div>
       ) : null}
 
-      <div style={{ display: 'grid', gap: '0.75rem' }}>
-        {orders.map((order) => {
-          const itemSummary = (order.order_items ?? []).map((item) => `${item.quantity} × ${item.sku || item.product_name}`).join(', ');
-          const computedSubtotal = (order.order_items ?? []).reduce((sum, item) => sum + item.quantity * item.unit_price, 0);
-          const subtotal = order.total_amount ?? computedSubtotal;
-          const rowStyle = order.urgency_status === 'urgent'
-            ? { backgroundColor: '#ffe6e6' }
-            : order.urgency_status === 'hold'
-              ? { backgroundColor: '#fff7d6' }
-              : { backgroundColor: '#fff' };
-
-          return (
-            <article key={order.id} style={{ ...rowStyle, border: '1px solid #e5e7eb', borderRadius: '12px', padding: '1rem' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap' }}>
-                <div>
-                  <div style={{ fontSize: '0.9rem', color: '#666' }}>{order.order_number ?? `Order #${order.id}`}</div>
-                  <div style={{ fontSize: '1.05rem', fontWeight: 700 }}>{order.customer_name}</div>
-                  <div style={{ color: '#666', marginTop: '0.2rem' }}>{new Date(order.created_at).toLocaleString()}</div>
-                </div>
-                <div style={{ textAlign: 'right' }}>
-                  <div style={{ fontWeight: 700 }}>Total: ৳{subtotal.toFixed(2)}</div>
-                  <div style={{ marginTop: '0.35rem', display: 'flex', gap: '0.35rem', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-                    <span style={{ ...statusBadgeStyle(order.urgency_status), borderRadius: '999px', padding: '0.25rem 0.6rem' }}>{statusLabel(order.urgency_status)}</span>
-                    <span style={{ ...statusBadgeStyle(order.confirmation_status), borderRadius: '999px', padding: '0.25rem 0.6rem' }}>{statusLabel(order.confirmation_status)}</span>
-                    <span style={{ ...statusBadgeStyle(order.delivery_status), borderRadius: '999px', padding: '0.25rem 0.6rem' }}>{statusLabel(order.delivery_status)}</span>
-                  </div>
-                </div>
-              </div>
-
-              <div style={{ marginTop: '0.75rem', color: '#374151' }}>
-                <strong>Items:</strong> {itemSummary || 'No items'}
-              </div>
-
-              <div style={{ marginTop: '0.75rem' }}>
-                <Link href={`/orders/${order.id}`} style={{ color: '#a83aa3', fontWeight: 600 }}>Open order →</Link>
-              </div>
-            </article>
-          );
-        })}
-      </div>
+      <OrdersList orders={orders} />
     </main>
   );
 }

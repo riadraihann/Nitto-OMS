@@ -79,10 +79,7 @@ export default function OrderDetailPage() {
       return;
     }
 
-    setMessage('Saved — returning to orders…');
-    window.setTimeout(() => {
-      router.replace(`/orders?updated=${Date.now()}`);
-    }, 250);
+    setMessage('Saved');
   };
 
   const bumpConfirmation = async () => {
