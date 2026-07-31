@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { supabaseAdmin } from '@/lib/supabase';
-import { CALL_PENDING_STAGES } from '@/lib/theme';
+import { CALL_PENDING_STAGES, HISTORY_DELIVERY_STATUSES } from '@/lib/theme';
+import { PAGE_SIZE_OPTIONS, parsePageParams, rangeFor, buildQueryHref } from '@/lib/pagination';
 import OrdersList from './OrdersList';
 
 export const dynamic = 'force-dynamic';
@@ -61,21 +62,22 @@ export default async function OrdersPage({ searchParams }: OrdersPageProps) {
   const sort = getParam(searchParams?.sort) || 'date';
   const dateFrom = getParam(searchParams?.date_from);
   const dateTo = getParam(searchParams?.date_to);
+  const { page, pageSize } = parsePageParams(searchParams);
 
   let query = supabaseAdmin
     .from('orders')
-    .select('id, order_number, customer_name, phone, address, urgency_type, urgency_target_date, confirmation_status, delivery_status, created_at, total_amount, archived_at, needs_review, needs_review_reasons, order_items(sku, product_name, quantity, unit_price)')
-    .order('created_at', { ascending: false });
+    .select('id, order_number, customer_name, phone, address, urgency_type, urgency_target_date, confirmation_status, delivery_status, created_at, total_amount, archived_at, needs_review, needs_review_reasons, order_items(sku, product_name, quantity, unit_price)', { count: 'exact' });
 
   if (view === 'archived') {
     // the one view that's ABOUT archived orders -- everywhere else excludes them
     query = query.not('archived_at', 'is', null);
   } else {
-    query = query.is('archived_at', null);
+    // /orders is the active working queue -- shipped orders (sent to courier or delivered)
+    // live on /history instead. This applies to every sub-view here (default, call-pending,
+    // needs-review): none of them are meaningful for an order that's already shipped.
+    query = query.is('archived_at', null).not('delivery_status', 'in', `(${HISTORY_DELIVERY_STATUSES.join(',')})`);
 
-    if (view === 'ready-for-delivery') {
-      query = query.in('delivery_status', ['sent_to_courier', 'delivered']);
-    } else if (view === 'call-pending') {
+    if (view === 'call-pending') {
       query = query.eq('order_source', 'shopify').in('confirmation_status', CALL_PENDING_STAGES);
     } else if (view === 'needs-review') {
       query = query.eq('needs_review', true);
@@ -101,12 +103,27 @@ export default async function OrdersPage({ searchParams }: OrdersPageProps) {
     query = query.lte('created_at', `${dateTo}T23:59:59.999+06:00`);
   }
 
+  // "sort by confirmation stage" (Call Pending only): pending/x1/x2/x3 happen to sort in
+  // exactly that order alphabetically, so a plain column sort gives the right stage grouping
+  // server-side -- no need to fetch everything and reorder client-side, which would have broken
+  // pagination (page 2 wouldn't reliably follow page 1 in stage order).
+  if (view === 'call-pending' && sort === 'stage') {
+    query = query.order('confirmation_status', { ascending: true }).order('created_at', { ascending: false });
+  } else {
+    query = query.order('created_at', { ascending: false });
+  }
+
+  const [from, to] = rangeFor(page, pageSize);
+  query = query.range(from, to);
+
   let data: any[] | null = null;
+  let totalCount = 0;
   let errorMessage = '';
 
   try {
     const result = await query;
     data = result.data as any[] | null;
+    totalCount = result.count ?? 0;
     if (result.error) {
       const { message, code, details, hint } = result.error;
       errorMessage = [message, code && `code=${code}`, details, hint].filter(Boolean).join(' | ');
@@ -124,25 +141,29 @@ export default async function OrdersPage({ searchParams }: OrdersPageProps) {
     );
   }
 
-  let orders = (data ?? []) as OrderRow[];
+  const orders = (data ?? []) as OrderRow[];
 
-  // PostgREST can't order by an arbitrary custom sequence, so the "by confirmation stage"
-  // sort (only offered on the Call Pending view) is applied client-side after the
-  // already-small filtered result set comes back. Newest-first within each stage.
-  if (view === 'call-pending' && sort === 'stage') {
-    const stageRank = (status: string) => {
-      const idx = CALL_PENDING_STAGES.indexOf(status);
-      return idx === -1 ? CALL_PENDING_STAGES.length : idx;
-    };
-    orders = [...orders].sort((a, b) => stageRank(a.confirmation_status) - stageRank(b.confirmation_status));
-  }
+  const currentParams: Record<string, string> = {
+    ...(view ? { view } : {}),
+    ...(urgency ? { urgency_type: urgency } : {}),
+    ...(confirmation ? { confirmation_status: confirmation } : {}),
+    ...(delivery ? { delivery_status: delivery } : {}),
+    ...(dateFrom ? { date_from: dateFrom } : {}),
+    ...(dateTo ? { date_to: dateTo } : {}),
+    ...(sort !== 'date' ? { sort } : {}),
+    page_size: String(pageSize),
+  };
+  const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
+  const prevHref = page > 1 ? buildQueryHref('/orders', currentParams, { page: page - 1 }) : null;
+  const nextHref = page < totalPages ? buildQueryHref('/orders', currentParams, { page: page + 1 }) : null;
+  const pageSizeHrefs = PAGE_SIZE_OPTIONS.map((size) => ({ size, href: buildQueryHref('/orders', currentParams, { page_size: size, page: 1 }) }));
 
   return (
     <main style={{ maxWidth: 1100, margin: '2rem auto', padding: '0 1rem' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
         <div>
           <h1 style={{ marginBottom: '0.25rem' }}>Orders</h1>
-          <p style={{ margin: 0, color: '#666' }}>A practical view of order headers plus their line items.</p>
+          <p style={{ margin: 0, color: '#666' }}>The active working queue -- shipped orders live on the History tab.</p>
         </div>
         <Link href="/orders/new" style={{ textDecoration: 'none' }}>
           <button type="button">Add order</button>
@@ -153,9 +174,6 @@ export default async function OrdersPage({ searchParams }: OrdersPageProps) {
         <Link href="/orders" className={`nav-pill${!view ? ' active' : ''}`}>
           All
         </Link>
-        <Link href={buildHref({ view: 'ready-for-delivery' })} className={`nav-pill${view === 'ready-for-delivery' ? ' active' : ''}`}>
-          Ready for delivery
-        </Link>
         <Link href={buildHref({ view: 'call-pending' })} className={`nav-pill${view === 'call-pending' ? ' active' : ''}`}>
           Call Pending
         </Link>
@@ -165,11 +183,17 @@ export default async function OrdersPage({ searchParams }: OrdersPageProps) {
         <Link href={buildHref({ view: 'archived' })} className={`nav-pill${view === 'archived' ? ' active' : ''}`}>
           Archived
         </Link>
+        <Link href="/history" className="nav-pill">
+          History
+        </Link>
         <Link href="/reports/products-by-date" className="nav-pill">
           Products by date report
         </Link>
         <Link href="/reports/attention-needed" className="nav-pill">
           Attention Needed
+        </Link>
+        <Link href="/reports/feedback" className="nav-pill">
+          Feedback report
         </Link>
       </div>
 
@@ -204,11 +228,11 @@ export default async function OrdersPage({ searchParams }: OrdersPageProps) {
               <option value="confirmed_c">Confirmed (C)</option>
               <option value="cancelled">Cancelled</option>
             </select>
+            {/* sent_to_courier/delivered live on /history -- offering them here would always
+                return zero rows, since the base query already excludes them */}
             <select name="delivery_status" defaultValue={delivery}>
               <option value="">All deliveries</option>
               <option value="packaging">Packaging</option>
-              <option value="sent_to_courier">Sent to courier</option>
-              <option value="delivered">Delivered</option>
               <option value="returned">Returned</option>
             </select>
           </>
@@ -231,7 +255,18 @@ export default async function OrdersPage({ searchParams }: OrdersPageProps) {
         </div>
       ) : null}
 
-      <OrdersList orders={orders} view={view} />
+      <OrdersList
+        orders={orders}
+        view={view}
+        bucket="active"
+        totalCount={totalCount}
+        page={page}
+        pageSize={pageSize}
+        prevHref={prevHref}
+        nextHref={nextHref}
+        pageSizeHrefs={pageSizeHrefs}
+        itemLabel="orders"
+      />
     </main>
   );
 }

@@ -5,9 +5,11 @@ import { usePathname } from 'next/navigation';
 
 const navItems = [
   { href: '/orders', label: 'Orders' },
+  { href: '/history', label: 'History' },
   { href: '/orders/new', label: 'Add order' },
   { href: '/reports/products-by-date', label: 'Products report' },
   { href: '/reports/attention-needed', label: 'Attention Needed' },
+  { href: '/reports/feedback', label: 'Feedback report' },
 ];
 
 export default function SiteHeader() {

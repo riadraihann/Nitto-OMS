@@ -74,6 +74,19 @@ export const urgencyTypeOptions = ['normal', 'urgent', 'hold', 'vu', 'd'];
 // this shared source of truth the two could silently drift apart.
 export const CALL_PENDING_STAGES = ['pending', 'x1', 'x2', 'x3'];
 
+// The /orders <-> /history split: an order is "history" once it's shipped (sent to courier or
+// already delivered), "active" otherwise. Shared between both pages' server queries and
+// OrdersList's client-side row removal, so an inline delivery_status edit that crosses this
+// boundary makes the row vanish from whichever tab it's currently being viewed on immediately,
+// not just after a reload. A "delivered" order later marked "returned" moves back OUT of
+// history (returned is active -- it needs processing), which falls out naturally from this
+// list not including 'returned'.
+export const HISTORY_DELIVERY_STATUSES = ['sent_to_courier', 'delivered'];
+
+export function isHistoryDelivery(deliveryStatus: string): boolean {
+  return HISTORY_DELIVERY_STATUSES.includes(deliveryStatus);
+}
+
 const urgencyTypeLabels: Record<string, string> = {
   vu: 'VU (Very Urgent)',
   d: 'D (Dispatch)',

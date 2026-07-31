@@ -2,8 +2,9 @@
 
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
-import { statusBadgeStyle, statusLabel, confirmationSteps, deliveryOptions, urgencyTypeOptions, urgencyTypeOptionLabel, urgencyLabel, telHref, CALL_PENDING_STAGES } from '@/lib/theme';
+import { statusBadgeStyle, statusLabel, confirmationSteps, deliveryOptions, urgencyTypeOptions, urgencyTypeOptionLabel, urgencyLabel, telHref, CALL_PENDING_STAGES, isHistoryDelivery } from '@/lib/theme';
 import { NEEDS_REVIEW_REASON_LABELS } from '@/lib/orderValidation.mjs';
+import PaginationBar from '@/app/components/PaginationBar';
 
 type OrderItem = {
   sku: string;
@@ -30,16 +31,37 @@ type OrderRow = {
   order_items: OrderItem[];
 };
 
-export default function OrdersList({ orders: initialOrders, view }: { orders: OrderRow[]; view: string }) {
-  const [orders, setOrders] = useState(initialOrders);
+type OrdersListProps = {
+  orders: OrderRow[];
+  view: string;
+  bucket: 'active' | 'history';
+  totalCount: number;
+  page: number;
+  pageSize: number;
+  prevHref: string | null;
+  nextHref: string | null;
+  pageSizeHrefs: { size: number; href: string }[];
+  itemLabel: string;
+};
 
-  // Switching views (e.g. Call Pending -> All) via the nav pills is a client-side
+export default function OrdersList({ orders: initialOrders, view, bucket, totalCount: initialTotalCount, page, pageSize, prevHref, nextHref, pageSizeHrefs, itemLabel }: OrdersListProps) {
+  const [orders, setOrders] = useState(initialOrders);
+  // Local copy so instant client-side row removals (archiving, a delivery_status edit that
+  // crosses the active/history boundary, a Call Pending row getting confirmed) can decrement
+  // the displayed total immediately, instead of the "Showing X of Y" count looking stale until
+  // the next full page load.
+  const [totalCount, setTotalCount] = useState(initialTotalCount);
+
+  // Switching views/pages/filters via the nav pills or pagination links is a client-side
   // navigation on the same route, so this component isn't remounted -- without this,
-  // useState(initialOrders) would keep showing whatever filtered list was left over
-  // from the previous view instead of the newly fetched orders for the new one.
+  // useState(initialOrders) would keep showing whatever filtered list was left over from the
+  // previous view instead of the newly fetched orders for the new one.
   useEffect(() => {
     setOrders(initialOrders);
   }, [initialOrders]);
+  useEffect(() => {
+    setTotalCount(initialTotalCount);
+  }, [initialTotalCount]);
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [exporting, setExporting] = useState(false);
   const [exportError, setExportError] = useState('');
@@ -100,12 +122,23 @@ export default function OrdersList({ orders: initialOrders, view }: { orders: Or
         if (result.sheetSyncWarning) {
           setRowWarnings((prev) => ({ ...prev, [orderId]: result.sheetSyncWarning }));
         }
+
         // Call Pending only ever shows pending/x1/x2/x3 -- once a row is marked confirmed or
         // cancelled it no longer belongs here, so drop it from view immediately rather than
         // leaving it visible (with an updated badge) until the next full page load
-        if (field === 'confirmation_status' && view === 'call-pending' && !CALL_PENDING_STAGES.includes(value)) {
+        const leftCallPending = field === 'confirmation_status' && view === 'call-pending' && !CALL_PENDING_STAGES.includes(value);
+
+        // /orders <-> /history split: a delivery_status edit that crosses the active/history
+        // boundary (e.g. marking something "sent_to_courier" while on /orders, or "returned"
+        // while on /history) means this row no longer belongs on whichever tab is currently
+        // open -- drop it immediately rather than leaving a shipped order sitting in the active
+        // queue (or a returned one stuck in history) until the next reload.
+        const crossedBucket = field === 'delivery_status' && isHistoryDelivery(value) !== (bucket === 'history');
+
+        if (leftCallPending || crossedBucket) {
           setOrders((prev) => prev.filter((o) => o.id !== orderId));
           setSelected((prev) => { const next = new Set(prev); next.delete(orderId); return next; });
+          setTotalCount((prev) => Math.max(0, prev - 1));
         }
       }
     } catch {
@@ -141,6 +174,7 @@ export default function OrdersList({ orders: initialOrders, view }: { orders: Or
       // Archived view -- either way, whichever view is currently open no longer wants it
       setOrders((prev) => prev.filter((o) => o.id !== orderId));
       setSelected((prev) => { const next = new Set(prev); next.delete(orderId); return next; });
+      setTotalCount((prev) => Math.max(0, prev - 1));
     } catch {
       setRowErrors((prev) => ({ ...prev, [orderId]: 'Unable to save' }));
     } finally {
@@ -178,6 +212,7 @@ export default function OrdersList({ orders: initialOrders, view }: { orders: Or
       const updated = new Set<number>(result.updatedIds);
       setOrders((prev) => prev.filter((o) => !updated.has(o.id)));
       setSelected(new Set());
+      setTotalCount((prev) => Math.max(0, prev - updated.size));
     } catch {
       setBulkArchiveError('Bulk action failed');
     } finally {
@@ -296,10 +331,22 @@ export default function OrdersList({ orders: initialOrders, view }: { orders: Or
 
   return (
     <div>
+      <PaginationBar
+        variant="compact"
+        page={page}
+        pageSize={pageSize}
+        totalCount={totalCount}
+        visibleCount={orders.length}
+        itemLabel={itemLabel}
+        prevHref={prevHref}
+        nextHref={nextHref}
+        pageSizeHrefs={pageSizeHrefs}
+      />
+
       <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.75rem', flexWrap: 'wrap' }}>
         <label style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.9rem' }}>
           <input type="checkbox" checked={allSelected} onChange={toggleAll} />
-          Select all
+          Select all on this page
         </label>
         <span style={{ fontSize: '0.9rem', color: '#666' }}>{selected.size} selected</span>
         <button type="button" onClick={exportSelected} disabled={selected.size === 0 || exporting}>
@@ -440,6 +487,18 @@ export default function OrdersList({ orders: initialOrders, view }: { orders: Or
           );
         })}
       </div>
+
+      <PaginationBar
+        variant="full"
+        page={page}
+        pageSize={pageSize}
+        totalCount={totalCount}
+        visibleCount={orders.length}
+        itemLabel={itemLabel}
+        prevHref={prevHref}
+        nextHref={nextHref}
+        pageSizeHrefs={pageSizeHrefs}
+      />
     </div>
   );
 }
