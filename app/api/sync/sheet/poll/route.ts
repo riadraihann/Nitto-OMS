@@ -42,9 +42,31 @@ export async function GET(request: Request) {
     scopes: ['https://www.googleapis.com/auth/spreadsheets.readonly'],
   });
 
+  // Google's "Unable to parse range" error fires both for genuinely malformed A1 syntax and
+  // for a sheet name that doesn't exist -- so instead of hardcoding the tab name into the
+  // range, look it up by title first. A mismatch then surfaces every real tab name in the
+  // error, rather than an opaque parse failure.
+  let actualTitle: string;
+  try {
+    const metaUrl = `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}?fields=sheets.properties.title`;
+    const metaResponse = await auth.request<{ sheets?: { properties?: { title?: string } }[] }>({ url: metaUrl });
+    const titles = (metaResponse.data.sheets ?? []).map((s) => s.properties?.title).filter((t): t is string => Boolean(t));
+    const match = titles.find((t) => t.trim().toLowerCase() === SHEET_TAB.trim().toLowerCase());
+    if (!match) {
+      return NextResponse.json(
+        { ok: false, error: `No tab named "${SHEET_TAB}" found. Actual tabs on this spreadsheet: ${titles.join(', ') || '(none readable)'}` },
+        { status: 502 }
+      );
+    }
+    actualTitle = match;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    return NextResponse.json({ ok: false, error: `Sheets API metadata request failed: ${message}` }, { status: 502 });
+  }
+
   // UNFORMATTED_VALUE: numbers come back as JS numbers (not "1,200" display strings) and
   // plain-text dates come back untouched -- both are what parseSheetRow expects
-  const range = encodeURIComponent(`'${SHEET_TAB}'!A:ZZ`);
+  const range = encodeURIComponent(`'${actualTitle}'!A:ZZ`);
   const url = `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/${range}?valueRenderOption=UNFORMATTED_VALUE`;
 
   let values: unknown[][] = [];
