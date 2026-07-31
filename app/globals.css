@@ -1,9 +1,121 @@
+:root {
+  --navy: #0a2472;
+  --navy-dark: #071a54;
+  --navy-tint: #eaeef7;
+  --orchid: #da70d6;
+  /* --orchid is a fill/background color only -- at its actual brightness, white text on
+     it fails WCAG contrast (~2.9:1, needs 4.5:1). Text/links use --orchid-text, a darker
+     magenta with the same hue that reads at ~5.5:1 on white. Anything filled with --orchid
+     pairs with --navy text, which reads at ~4.8:1. */
+  --orchid-text: #a83aa3;
+  --orchid-tint: #fbeafa;
+  --bg-page: #f5f6fa;
+  --bg-banner: #ffffff;
+  --text: #16213e;
+  --text-muted: #666;
+  --border: #e0e2e8;
+}
+
 html, body {
   margin: 0;
   padding: 0;
   font-family: Arial, sans-serif;
-  background: #f7f7f8;
-  color: #111827;
+  background: var(--bg-page);
+  color: var(--text);
 }
 
 * { box-sizing: border-box; }
+
+h1, h2, h3 {
+  color: var(--navy);
+}
+
+a {
+  color: var(--orchid-text);
+}
+
+button {
+  font-family: inherit;
+  font-size: 0.95rem;
+  padding: 0.5rem 0.9rem;
+  border-radius: 8px;
+  border: 1px solid var(--navy);
+  background: var(--navy);
+  color: #fff;
+  cursor: pointer;
+}
+
+button:hover {
+  background: var(--navy-dark);
+  border-color: var(--navy-dark);
+}
+
+button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+button.btn-secondary {
+  background: var(--orchid);
+  border-color: var(--orchid);
+  color: var(--navy);
+  font-weight: 600;
+}
+
+button.btn-secondary:hover {
+  box-shadow: inset 0 0 0 2px var(--navy);
+}
+
+button.btn-plain {
+  background: #fff;
+  border-color: var(--border);
+  color: var(--text);
+}
+
+button.btn-plain:hover {
+  background: #f0f1f4;
+  border-color: var(--border);
+}
+
+input, select, textarea {
+  font-family: inherit;
+  font-size: 0.95rem;
+  padding: 0.4rem 0.55rem;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  color: var(--text);
+  background: #fff;
+}
+
+input:focus, select:focus, textarea:focus {
+  outline: none;
+  border-color: var(--orchid);
+  box-shadow: 0 0 0 2px var(--orchid-tint);
+}
+
+label {
+  font-size: 0.9rem;
+  color: var(--text);
+}
+
+.nav-pill {
+  display: inline-block;
+  padding: 0.35rem 0.7rem;
+  border-radius: 999px;
+  border: 1px solid var(--navy);
+  text-decoration: none;
+  color: var(--navy);
+  background: #fff;
+  font-size: 0.9rem;
+}
+
+.nav-pill:hover {
+  background: var(--navy-tint);
+}
+
+.nav-pill.active {
+  background: var(--orchid);
+  border-color: var(--orchid);
+  color: var(--navy);
+  font-weight: 600;
+}

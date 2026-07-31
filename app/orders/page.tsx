@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { supabaseAdmin } from '@/lib/supabase';
+import { statusBadgeStyle } from '@/lib/theme';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -33,26 +34,6 @@ function getParam(value: string | string[] | undefined) {
 function buildHref(params: Record<string, string>) {
   const search = new URLSearchParams(params);
   return `/orders${search.toString() ? `?${search.toString()}` : ''}`;
-}
-
-function statusBadgeStyle(status: string) {
-  const styles: Record<string, React.CSSProperties> = {
-    normal: { background: '#e8f5e9', color: '#2e7d32' },
-    urgent: { background: '#ffebee', color: '#c62828' },
-    hold: { background: '#fff8e1', color: '#ef6c00' },
-    pending: { background: '#f3e5f5', color: '#6a1b9a' },
-    x1: { background: '#e3f2fd', color: '#1565c0' },
-    x2: { background: '#e1f5fe', color: '#0277bd' },
-    x3: { background: '#ede7f6', color: '#512da8' },
-    confirmed: { background: '#e8f5e9', color: '#2e7d32' },
-    cancelled: { background: '#f5f5f5', color: '#616161' },
-    packaging: { background: '#f3e5f5', color: '#6a1b9a' },
-    sent_to_courier: { background: '#e0f7fa', color: '#00838f' },
-    delivered: { background: '#e8f5e9', color: '#2e7d32' },
-    returned: { background: '#fff3e0', color: '#ef6c00' },
-  };
-
-  return styles[status] ?? { background: '#f5f5f5', color: '#616161' };
 }
 
 export default async function OrdersPage({ searchParams }: OrdersPageProps) {
@@ -132,17 +113,19 @@ export default async function OrdersPage({ searchParams }: OrdersPageProps) {
           <h1 style={{ marginBottom: '0.25rem' }}>Orders</h1>
           <p style={{ margin: 0, color: '#666' }}>A practical view of order headers plus their line items.</p>
         </div>
-        <Link href="/orders/new" style={{ textDecoration: 'none', fontWeight: 600 }}>Add order</Link>
+        <Link href="/orders/new" style={{ textDecoration: 'none' }}>
+          <button type="button">Add order</button>
+        </Link>
       </div>
 
       <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginBottom: '1rem' }}>
-        <Link href="/orders" style={{ padding: '0.35rem 0.6rem', border: '1px solid #ccc', textDecoration: 'none', color: '#111' }}>
+        <Link href="/orders" className={`nav-pill${view !== 'ready-for-delivery' ? ' active' : ''}`}>
           All
         </Link>
-        <Link href={buildHref({ view: 'ready-for-delivery' })} style={{ padding: '0.35rem 0.6rem', border: '1px solid #ccc', textDecoration: 'none', color: '#111' }}>
+        <Link href={buildHref({ view: 'ready-for-delivery' })} className={`nav-pill${view === 'ready-for-delivery' ? ' active' : ''}`}>
           Ready for delivery
         </Link>
-        <Link href="/reports/products-by-date" style={{ padding: '0.35rem 0.6rem', border: '1px solid #ccc', textDecoration: 'none', color: '#111' }}>
+        <Link href="/reports/products-by-date" className="nav-pill">
           Products by date report
         </Link>
       </div>
@@ -180,7 +163,7 @@ export default async function OrdersPage({ searchParams }: OrdersPageProps) {
           <option value="returned">Returned</option>
         </select>
         <button type="submit">Apply</button>
-        <Link href="/orders" style={{ padding: '0.35rem 0.6rem', border: '1px solid #ccc', textDecoration: 'none', color: '#111' }}>
+        <Link href="/orders" className="nav-pill">
           Clear
         </Link>
       </form>
@@ -219,7 +202,7 @@ export default async function OrdersPage({ searchParams }: OrdersPageProps) {
               </div>
 
               <div style={{ marginTop: '0.75rem' }}>
-                <Link href={`/orders/${order.id}`}>Open order</Link>
+                <Link href={`/orders/${order.id}`} style={{ color: '#a83aa3', fontWeight: 600 }}>Open order →</Link>
               </div>
             </article>
           );

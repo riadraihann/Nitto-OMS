@@ -131,7 +131,7 @@ export default function NewOrderPage() {
         <div style={{ border: '1px solid #ddd', borderRadius: '12px', padding: '1rem', display: 'grid', gap: '0.75rem' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <h2 style={{ margin: 0 }}>Line items</h2>
-            <button type="button" onClick={addItem}>Add another item</button>
+            <button type="button" className="btn-secondary" onClick={addItem}>Add another item</button>
           </div>
 
           {items.map((item, index) => (
@@ -139,7 +139,7 @@ export default function NewOrderPage() {
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <strong>Item {index + 1}</strong>
                 {items.length > 1 ? (
-                  <button type="button" onClick={() => removeItem(index)}>Remove</button>
+                  <button type="button" className="btn-plain" onClick={() => removeItem(index)}>Remove</button>
                 ) : null}
               </div>
 

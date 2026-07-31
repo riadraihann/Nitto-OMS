@@ -135,7 +135,7 @@ export default async function ProductsByDatePage({ searchParams }: ReportPagePro
           <h1 style={{ marginBottom: '0.25rem' }}>Products by date</h1>
           <p style={{ margin: 0, color: '#666' }}>Quantity and value ordered per product, grouped by variant with grand totals per product.</p>
         </div>
-        <Link href="/orders" style={{ textDecoration: 'none', fontWeight: 600 }}>Back to orders</Link>
+        <Link href="/orders" className="nav-pill">← Back to orders</Link>
       </div>
 
       <form action="/reports/products-by-date" method="get" style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center', marginBottom: '1rem' }}>
@@ -148,7 +148,7 @@ export default async function ProductsByDatePage({ searchParams }: ReportPagePro
           <input type="date" name="date_to" defaultValue={dateTo} />
         </label>
         <button type="submit">Apply</button>
-        <Link href="/reports/products-by-date" style={{ padding: '0.35rem 0.6rem', border: '1px solid #ccc', textDecoration: 'none', color: '#111' }}>
+        <Link href="/reports/products-by-date" className="nav-pill">
           Clear
         </Link>
       </form>
@@ -157,7 +157,7 @@ export default async function ProductsByDatePage({ searchParams }: ReportPagePro
         <p style={{ color: '#666', fontStyle: 'italic', marginBottom: '1rem' }}>Showing all-time data. Pick a date or range above to narrow it down.</p>
       ) : null}
 
-      <div style={{ border: '1px solid #e5e7eb', borderRadius: '12px', padding: '1rem', marginBottom: '1rem', fontWeight: 700 }}>
+      <div style={{ borderLeft: '4px solid #0a2472', background: '#eaeef7', borderRadius: '8px', padding: '0.85rem 1rem', marginBottom: '1rem', fontWeight: 700, color: '#0a2472' }}>
         Grand total: {grandTotalQuantity} items · ৳{grandTotalValue.toFixed(2)}
       </div>
 
@@ -166,7 +166,7 @@ export default async function ProductsByDatePage({ searchParams }: ReportPagePro
           <article key={group.base} style={{ border: '1px solid #e5e7eb', borderRadius: '12px', padding: '1rem' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', flexWrap: 'wrap', gap: '0.5rem' }}>
               <h2 style={{ margin: 0, fontSize: '1.1rem' }}>{group.base}</h2>
-              <div style={{ fontWeight: 700 }}>{group.quantity} items · ৳{group.subtotal.toFixed(2)}</div>
+              <div style={{ fontWeight: 700, color: '#a83aa3' }}>{group.quantity} items · ৳{group.subtotal.toFixed(2)}</div>
             </div>
 
             {group.variants.length > 1 || group.variants[0]?.productName !== group.base ? (
