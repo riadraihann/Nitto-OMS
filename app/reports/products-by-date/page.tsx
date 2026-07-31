@@ -12,6 +12,7 @@ type OrderItem = {
 
 type OrderRow = {
   created_at: string;
+  total_amount: number | null;
   order_items: OrderItem[];
 };
 
@@ -42,7 +43,7 @@ async function fetchOrdersInRange(dateFrom: string, dateTo: string) {
   for (;;) {
     let query = supabase
       .from('orders')
-      .select('created_at, order_items(product_name, quantity, unit_price)')
+      .select('created_at, total_amount, order_items(product_name, quantity, unit_price)')
       .order('created_at', { ascending: true })
       .range(from, from + PAGE - 1);
 
@@ -98,9 +99,22 @@ export default async function ProductsByDatePage({ searchParams }: ReportPagePro
   const baseGroups = new Map<string, BaseAgg>();
 
   for (const order of orders) {
-    for (const item of order.order_items ?? []) {
+    const items = order.order_items ?? [];
+    const computedTotal = items.reduce((sum, item) => sum + item.quantity * item.unit_price, 0);
+    const totalQuantity = items.reduce((sum, item) => sum + item.quantity, 0);
+    // sheet-synced orders (both the June import and the live "Real Todays" sync) only ever
+    // carry a single order-level bill amount -- there's no real per-item price, so every
+    // item.unit_price is 0. Rather than reporting every sheet-sourced product as worth ৳0,
+    // distribute the order's total proportionally by quantity across its items. This is an
+    // approximation (assumes uniform per-unit pricing within the order), not real per-item
+    // pricing, but it's the best available without that data.
+    const useDistributedValue = computedTotal === 0 && order.total_amount != null && totalQuantity > 0;
+
+    for (const item of items) {
       const { base } = splitVariant(item.product_name);
-      const lineSubtotal = item.quantity * item.unit_price;
+      const lineSubtotal = useDistributedValue
+        ? (item.quantity / totalQuantity) * (order.total_amount as number)
+        : item.quantity * item.unit_price;
 
       if (!baseGroups.has(base)) {
         baseGroups.set(base, { base, quantity: 0, subtotal: 0, variants: new Map() });
