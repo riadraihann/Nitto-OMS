@@ -5,3 +5,4 @@ node_modules
 .vscode
 wjunw.csv
 tsconfig.tsbuildinfo
+secrets/
