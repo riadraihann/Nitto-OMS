@@ -53,7 +53,7 @@ export default function OrdersList({ orders: initialOrders }: { orders: OrderRow
       }
 
       const s = result.summary;
-      setSyncMessage(`Synced: ${s.created} created, ${s.updated} updated, ${s.removed} removed, ${s.skipped} skipped, ${s.warnings} warnings, ${s.errors} errors`);
+      setSyncMessage(`Synced: ${s.created} created, ${s.updated} updated, ${s.unchanged} unchanged, ${s.removed} removed, ${s.skipped} skipped, ${s.warnings} warnings, ${s.errors} errors`);
     } catch {
       setSyncError('Sync failed');
     } finally {

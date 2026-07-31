@@ -23,13 +23,21 @@ type ExistingOrder = {
   confirmation_status: string;
   urgency_type: string;
   urgency_target_date: string | null;
+  customer_name: string;
+  phone: string;
+  address: string;
+  total_amount: number | null;
+  created_at: string;
+  order_source: string;
+  sheet_row_number: number | null;
+  order_items: { product_name: string; quantity: number }[];
 };
 
 export type ReconcileResult = {
   ok: boolean;
   status: number;
   error?: string;
-  summary?: { created: number; updated: number; removed: number; skipped: number; warnings: number; errors: number };
+  summary?: { created: number; updated: number; unchanged: number; removed: number; skipped: number; warnings: number; errors: number };
   skipped?: { rowIndex: number; reason: string }[];
   warnings?: { order_number: string; message: string }[];
   errors?: { order_number: string; error: string }[];
@@ -37,6 +45,27 @@ export type ReconcileResult = {
 
 function dayOfMonth(dateStr: string | null): number | null {
   return dateStr ? new Date(dateStr).getUTCDate() : null;
+}
+
+function scalarFieldsChanged(sheetOwnedFields: Record<string, unknown>, sheetRowNumber: number, existing: ExistingOrder): boolean {
+  return (
+    sheetOwnedFields.customer_name !== existing.customer_name ||
+    sheetOwnedFields.phone !== existing.phone ||
+    sheetOwnedFields.address !== existing.address ||
+    sheetOwnedFields.total_amount !== existing.total_amount ||
+    sheetOwnedFields.order_source !== existing.order_source ||
+    sheetRowNumber !== existing.sheet_row_number ||
+    new Date(sheetOwnedFields.created_at as string).getTime() !== new Date(existing.created_at).getTime()
+  );
+}
+
+function itemsChanged(parsedItems: { product_name: string; quantity: number }[], existingItems: ExistingOrder['order_items']): boolean {
+  if (parsedItems.length !== existingItems.length) return true;
+  const normalize = (items: { product_name: string; quantity: number }[]) =>
+    items.map((item) => `${item.product_name}::${item.quantity}`).sort();
+  const a = normalize(parsedItems);
+  const b = normalize(existingItems);
+  return a.some((value, index) => value !== b[index]);
 }
 
 // Shared by the push-based webhook (app/api/sync/sheet/route.ts), the periodic backstop poll,
@@ -99,7 +128,7 @@ export async function reconcileSheetRows(rows: unknown[]): Promise<ReconcileResu
     const chunk = orderNumbers.slice(i, i + LOOKUP_CHUNK);
     const { data, error } = await supabaseAdmin
       .from('orders')
-      .select('id, order_number, confirmation_status, urgency_type, urgency_target_date')
+      .select('id, order_number, confirmation_status, urgency_type, urgency_target_date, customer_name, phone, address, total_amount, created_at, order_source, sheet_row_number, order_items(product_name, quantity)')
       .in('order_number', chunk)
       .not('synced_from_sheet_at', 'is', null);
 
@@ -113,6 +142,7 @@ export async function reconcileSheetRows(rows: unknown[]): Promise<ReconcileResu
 
   let created = 0;
   let updated = 0;
+  let unchanged = 0;
   const errors: { order_number: string; error: string }[] = [];
   const nowIso = new Date().toISOString();
 
@@ -131,12 +161,7 @@ export async function reconcileSheetRows(rows: unknown[]): Promise<ReconcileResu
     const existing = existingByOrderNumber.get(orderNumber);
 
     if (existing) {
-      const update: Record<string, unknown> = {
-        ...sheetOwnedFields,
-        sheet_row_number: sheetRowNumber,
-        synced_from_sheet_at: nowIso,
-        removed_from_sheet_at: null,
-      };
+      const update: Record<string, unknown> = {};
 
       // confirmation: apply only if parsed cleanly AND actually differs (loop prevention)
       if (parsedConfirmationStatus === null) {
@@ -159,25 +184,42 @@ export async function reconcileSheetRows(rows: unknown[]): Promise<ReconcileResu
         }
       }
 
-      const { error: updateError } = await supabaseAdmin.from('orders').update(update).eq('id', existing.id);
+      const needsFieldUpdate = Object.keys(update).length > 0 || scalarFieldsChanged(sheetOwnedFields, sheetRowNumber, existing);
+      const needsItemsUpdate = itemsChanged(items, existing.order_items);
 
-      if (updateError) {
-        errors.push({ order_number: orderNumber, error: updateError.message });
+      // the whole point: an unchanged row costs zero DB writes, not an update + a delete +
+      // an insert every single sync pass -- that's what was making "Sync Now" take minutes
+      if (!needsFieldUpdate && !needsItemsUpdate) {
+        unchanged += 1;
         continue;
       }
 
-      const { error: deleteItemsError } = await supabaseAdmin.from('order_items').delete().eq('order_id', existing.id);
-      if (deleteItemsError) {
-        errors.push({ order_number: orderNumber, error: deleteItemsError.message });
-        continue;
+      if (needsFieldUpdate) {
+        const { error: updateError } = await supabaseAdmin
+          .from('orders')
+          .update({ ...sheetOwnedFields, ...update, sheet_row_number: sheetRowNumber, synced_from_sheet_at: nowIso, removed_from_sheet_at: null })
+          .eq('id', existing.id);
+
+        if (updateError) {
+          errors.push({ order_number: orderNumber, error: updateError.message });
+          continue;
+        }
       }
 
-      const { error: insertItemsError } = await supabaseAdmin
-        .from('order_items')
-        .insert(items.map((item) => ({ order_id: existing.id, ...item })));
-      if (insertItemsError) {
-        errors.push({ order_number: orderNumber, error: insertItemsError.message });
-        continue;
+      if (needsItemsUpdate) {
+        const { error: deleteItemsError } = await supabaseAdmin.from('order_items').delete().eq('order_id', existing.id);
+        if (deleteItemsError) {
+          errors.push({ order_number: orderNumber, error: deleteItemsError.message });
+          continue;
+        }
+
+        const { error: insertItemsError } = await supabaseAdmin
+          .from('order_items')
+          .insert(items.map((item) => ({ order_id: existing.id, ...item })));
+        if (insertItemsError) {
+          errors.push({ order_number: orderNumber, error: insertItemsError.message });
+          continue;
+        }
       }
 
       updated += 1;
@@ -254,7 +296,7 @@ export async function reconcileSheetRows(rows: unknown[]): Promise<ReconcileResu
   return {
     ok: true,
     status: 200,
-    summary: { created, updated, removed, skipped: skipped.length, warnings: warnings.length, errors: errors.length },
+    summary: { created, updated, unchanged, removed, skipped: skipped.length, warnings: warnings.length, errors: errors.length },
     skipped,
     warnings,
     errors,
