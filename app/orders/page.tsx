@@ -26,6 +26,8 @@ type OrderRow = {
   created_at: string;
   total_amount: number | null;
   archived_at: string | null;
+  needs_review: boolean;
+  needs_review_reasons: string[] | null;
   order_items: OrderItem[];
 };
 
@@ -62,7 +64,7 @@ export default async function OrdersPage({ searchParams }: OrdersPageProps) {
 
   let query = supabaseAdmin
     .from('orders')
-    .select('id, order_number, customer_name, phone, address, urgency_type, urgency_target_date, confirmation_status, delivery_status, created_at, total_amount, archived_at, order_items(sku, product_name, quantity, unit_price)')
+    .select('id, order_number, customer_name, phone, address, urgency_type, urgency_target_date, confirmation_status, delivery_status, created_at, total_amount, archived_at, needs_review, needs_review_reasons, order_items(sku, product_name, quantity, unit_price)')
     .order('created_at', { ascending: false });
 
   if (view === 'archived') {
@@ -75,6 +77,8 @@ export default async function OrdersPage({ searchParams }: OrdersPageProps) {
       query = query.in('delivery_status', ['sent_to_courier', 'delivered']);
     } else if (view === 'call-pending') {
       query = query.eq('order_source', 'shopify').in('confirmation_status', CALL_PENDING_STAGES);
+    } else if (view === 'needs-review') {
+      query = query.eq('needs_review', true);
     } else {
       if (urgency) {
         query = query.eq('urgency_type', urgency);
@@ -155,6 +159,9 @@ export default async function OrdersPage({ searchParams }: OrdersPageProps) {
         <Link href={buildHref({ view: 'call-pending' })} className={`nav-pill${view === 'call-pending' ? ' active' : ''}`}>
           Call Pending
         </Link>
+        <Link href={buildHref({ view: 'needs-review' })} className={`nav-pill${view === 'needs-review' ? ' active' : ''}`}>
+          Needs Review
+        </Link>
         <Link href={buildHref({ view: 'archived' })} className={`nav-pill${view === 'archived' ? ' active' : ''}`}>
           Archived
         </Link>
@@ -173,7 +180,7 @@ export default async function OrdersPage({ searchParams }: OrdersPageProps) {
           To
           <input type="date" name="date_to" defaultValue={dateTo} />
         </label>
-        {view !== 'call-pending' && view !== 'archived' ? (
+        {view !== 'call-pending' && view !== 'archived' && view !== 'needs-review' ? (
           <>
             <select name="urgency_type" defaultValue={urgency}>
               <option value="">All urgencies</option>

@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { statusBadgeStyle, statusLabel, confirmationSteps, deliveryOptions, urgencyTypeOptions, urgencyTypeOptionLabel, urgencyLabel, telHref, CALL_PENDING_STAGES } from '@/lib/theme';
+import { NEEDS_REVIEW_REASON_LABELS } from '@/lib/orderValidation.mjs';
 
 type OrderItem = {
   sku: string;
@@ -24,6 +25,8 @@ type OrderRow = {
   created_at: string;
   total_amount: number | null;
   archived_at: string | null;
+  needs_review: boolean;
+  needs_review_reasons: string[] | null;
   order_items: OrderItem[];
 };
 
@@ -352,6 +355,12 @@ export default function OrdersList({ orders: initialOrders, view }: { orders: Or
                     </div>
                   </div>
                 </div>
+
+                {order.needs_review ? (
+                  <div style={{ marginTop: '0.5rem', background: '#fff3e0', color: '#8a5300', borderRadius: '8px', padding: '0.4rem 0.6rem', fontSize: '0.85rem' }}>
+                    Needs review: {(order.needs_review_reasons ?? []).map((reason) => NEEDS_REVIEW_REASON_LABELS[reason] ?? reason).join(', ')}
+                  </div>
+                ) : null}
 
                 <div style={{ marginTop: '0.75rem', color: '#374151' }}>
                   <strong>Items:</strong> {itemSummary || 'No items'}

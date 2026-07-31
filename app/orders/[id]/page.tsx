@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { statusBadgeStyle, statusLabel, confirmationSteps, deliveryOptions, urgencyTypeOptions, urgencyTypeOptionLabel, urgencyLabel, telHref } from '@/lib/theme';
+import { NEEDS_REVIEW_REASON_LABELS } from '@/lib/orderValidation.mjs';
 
 type OrderItem = {
   id?: number;
@@ -40,6 +41,8 @@ type Order = {
   product_suggestions: string | null;
   total_amount: number | null;
   archived_at: string | null;
+  needs_review: boolean;
+  needs_review_reasons: string[] | null;
   order_items?: OrderItem[];
 };
 
@@ -234,6 +237,12 @@ export default function OrderDetailPage() {
       <p>Created: {new Date(order.created_at).toLocaleString()}</p>
       <p>Phone: <a href={telHref(order.phone)}>{order.phone}</a></p>
       <p>Address: {order.address}</p>
+
+      {order.needs_review ? (
+        <div style={{ background: '#fff3e0', color: '#8a5300', borderRadius: '8px', padding: '0.6rem 0.85rem', marginBottom: '1rem' }}>
+          <strong>Needs review:</strong> {(order.needs_review_reasons ?? []).map((reason) => NEEDS_REVIEW_REASON_LABELS[reason] ?? reason).join(', ')}
+        </div>
+      ) : null}
 
       <div style={{ border: '1px solid #ddd', borderRadius: '12px', padding: '1rem', marginTop: '1rem' }}>
         <h2 style={{ marginTop: 0 }}>Items</h2>

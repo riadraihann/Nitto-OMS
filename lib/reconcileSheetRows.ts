@@ -1,6 +1,7 @@
 import { supabaseAdmin } from '@/lib/supabase';
 import { parseSheetRow } from '@/lib/sheetRowParser.mjs';
 import { diffOrderFields, summarizeItems } from '@/lib/orderHistory.mjs';
+import { computeNeedsReview, reviewReasonsChanged } from '@/lib/orderValidation.mjs';
 
 type HistoryEntry = { order_id: number; field: string; old_value: string | null; new_value: string | null; source: string };
 
@@ -51,6 +52,8 @@ type ExistingOrder = {
   created_at: string;
   order_source: string;
   sheet_row_number: number | null;
+  needs_review: boolean;
+  needs_review_reasons: string[] | null;
   order_items: { product_name: string; quantity: number }[];
 };
 
@@ -151,7 +154,7 @@ export async function reconcileSheetRows(rows: unknown[]): Promise<ReconcileResu
     const chunk = orderNumbers.slice(i, i + LOOKUP_CHUNK);
     const { data, error } = await supabaseAdmin
       .from('orders')
-      .select('id, order_number, confirmation_status, urgency_type, urgency_target_date, customer_name, phone, address, total_amount, special_instructions, cancel_return_reason, created_at, order_source, sheet_row_number, order_items(product_name, quantity)')
+      .select('id, order_number, confirmation_status, urgency_type, urgency_target_date, customer_name, phone, address, total_amount, special_instructions, cancel_return_reason, created_at, order_source, sheet_row_number, needs_review, needs_review_reasons, order_items(product_name, quantity)')
       .in('order_number', chunk)
       .not('synced_from_sheet_at', 'is', null);
 
@@ -208,8 +211,20 @@ export async function reconcileSheetRows(rows: unknown[]): Promise<ReconcileResu
         }
       }
 
-      const needsFieldUpdate = Object.keys(update).length > 0 || scalarFieldsChanged(sheetOwnedFields, sheetRowNumber, existing);
+      let needsFieldUpdate = Object.keys(update).length > 0 || scalarFieldsChanged(sheetOwnedFields, sheetRowNumber, existing);
       const needsItemsUpdate = itemsChanged(items, existing.order_items);
+
+      // needs_review is derived from phone/total_amount/item-count, all of which are covered by
+      // needsFieldUpdate/needsItemsUpdate above -- so it only needs recomputing when something
+      // already looks changed, never as an independent trigger for an otherwise-unchanged row
+      if (needsFieldUpdate || needsItemsUpdate) {
+        const proposedReview = computeNeedsReview(sheetOwnedFields as { phone?: string; total_amount?: number }, items);
+        if (proposedReview.needs_review !== existing.needs_review || reviewReasonsChanged(proposedReview.needs_review_reasons, existing.needs_review_reasons)) {
+          update.needs_review = proposedReview.needs_review;
+          update.needs_review_reasons = proposedReview.needs_review_reasons;
+          needsFieldUpdate = true;
+        }
+      }
 
       // the whole point: an unchanged row costs zero DB writes, not an update + a delete +
       // an insert every single sync pass -- that's what was making "Sync Now" take minutes
@@ -278,6 +293,7 @@ export async function reconcileSheetRows(rows: unknown[]): Promise<ReconcileResu
         delivery_status: defaults.delivery_status,
         sheet_row_number: sheetRowNumber,
         synced_from_sheet_at: nowIso,
+        ...computeNeedsReview(sheetOwnedFields as { phone?: string; total_amount?: number }, items),
       };
 
       const { data: newOrder, error: insertError } = await supabaseAdmin

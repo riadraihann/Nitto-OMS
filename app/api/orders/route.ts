@@ -4,6 +4,12 @@ import { normalizeUrgencyFields } from '@/lib/urgencyTarget.mjs';
 import { buildColumnC } from '@/lib/sheetRowParser.mjs';
 import { writeColumnC } from '@/lib/sheetWriteBack';
 import { diffOrderFields, logOrderHistory } from '@/lib/orderHistory.mjs';
+import { computeNeedsReview } from '@/lib/orderValidation.mjs';
+
+// Fields whose values feed computeNeedsReview -- a PATCH only needs to recompute needs_review
+// when one of these actually changed (item count can't change via this endpoint at all, so it's
+// not in this list; see reconcileSheetRows.ts for where item-driven recompute happens).
+const REVIEW_RELEVANT_FIELDS = ['phone', 'total_amount'];
 
 // normalizeUrgencyFields always resolves urgency_type changes down to these two keys (plus
 // confirmation_status passes through untouched) -- checking for these after normalization is
@@ -51,9 +57,20 @@ export async function POST(request: Request) {
     }
     const orderData = normalized.payload;
 
+    const normalizedItems = (items as Array<Record<string, unknown>>)
+      .filter((item) => Boolean(item?.sku || item?.product_name))
+      .map((item) => ({
+        sku: String(item.sku ?? ''),
+        product_name: String(item.product_name ?? ''),
+        quantity: Number(item.quantity ?? 1),
+        unit_price: Number(item.unit_price ?? 0),
+      }));
+
+    const review = computeNeedsReview(orderData as { phone?: string; total_amount?: number }, normalizedItems);
+
     const { data: order, error: orderError } = await supabaseAdmin
       .from('orders')
-      .insert([orderData])
+      .insert([{ ...orderData, ...review }])
       .select()
       .single();
 
@@ -61,18 +78,10 @@ export async function POST(request: Request) {
       return NextResponse.json({ ok: false, error: orderError?.message ?? 'Unable to create order' }, { status: 500 });
     }
 
-    const normalizedItems = (items as Array<Record<string, unknown>>)
-      .filter((item) => Boolean(item?.sku || item?.product_name))
-      .map((item) => ({
-        order_id: order.id,
-        sku: String(item.sku ?? ''),
-        product_name: String(item.product_name ?? ''),
-        quantity: Number(item.quantity ?? 1),
-        unit_price: Number(item.unit_price ?? 0),
-      }));
-
     if (normalizedItems.length > 0) {
-      const { error: itemsError } = await supabaseAdmin.from('order_items').insert(normalizedItems);
+      const { error: itemsError } = await supabaseAdmin
+        .from('order_items')
+        .insert(normalizedItems.map((item) => ({ order_id: order.id, ...item })));
 
       if (itemsError) {
         await supabaseAdmin.from('orders').delete().eq('id', order.id);
@@ -113,6 +122,18 @@ export async function PATCH(request: Request) {
     const normalized = normalizeUrgencyFields(rawUpdatePayload);
     if (!normalized.ok) {
       return NextResponse.json({ ok: false, error: normalized.error }, { status: 400 });
+    }
+
+    // phone/total_amount are sheet/CSV-owned and not edited through the UI today, but PATCH is a
+    // generic endpoint -- recompute needs_review whenever a review-relevant field is actually
+    // touched, so a direct API call (or a future UI for these fields) can't silently desync the flag
+    if (REVIEW_RELEVANT_FIELDS.some((field) => field in normalized.payload)) {
+      const [{ data: currentOrder }, { data: currentItems }] = await Promise.all([
+        supabaseAdmin.from('orders').select('phone, total_amount').eq('id', id).single(),
+        supabaseAdmin.from('order_items').select('quantity, unit_price').eq('order_id', id),
+      ]);
+      const merged = { ...currentOrder, ...normalized.payload };
+      Object.assign(normalized.payload, computeNeedsReview(merged as { phone?: string; total_amount?: number }, currentItems ?? []));
     }
 
     const updatedFields = Object.keys(normalized.payload);
