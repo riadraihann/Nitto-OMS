@@ -229,6 +229,8 @@ function buildOrders() {
       continue;
     }
 
+    const billAmount = parseFloat(c(10));
+
     orders.push({
       row: idx,
       order_number: orderNumber,
@@ -244,12 +246,15 @@ function buildOrders() {
       cancel_return_reason: returnFlagged ? notes || null : null,
       happiness_score: null,
       product_suggestions: null,
+      total_amount: Number.isFinite(billAmount) ? billAmount : null,
       items,
     });
   }
 
   return { orders, skippedDividerOrEmpty, unmatchedSourcePrefixes, validationErrors, outOfRangeDates, likelyDuplicateRows, totalRows: allRows.length };
 }
+
+export { buildOrders, CSV_PATH };
 
 function printSummary({ orders, skippedDividerOrEmpty, unmatchedSourcePrefixes, validationErrors, outOfRangeDates, likelyDuplicateRows, totalRows }) {
   const bySource = {};
@@ -334,12 +339,15 @@ async function execute(orders) {
   console.log(`\nDone. Inserted ${insertedOrders} orders and ${insertedItems} order_items.`);
 }
 
-const result = buildOrders();
-printSummary(result);
+const isMainModule = process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1]);
+if (isMainModule) {
+  const result = buildOrders();
+  printSummary(result);
 
-if (mode === 'execute') {
-  console.log('\n=== Executing real insert against Supabase ===');
-  await execute(result.orders);
-} else {
-  console.log('\n(dry run only, no writes performed. Re-run with --execute to insert.)');
+  if (mode === 'execute') {
+    console.log('\n=== Executing real insert against Supabase ===');
+    await execute(result.orders);
+  } else {
+    console.log('\n(dry run only, no writes performed. Re-run with --execute to insert.)');
+  }
 }

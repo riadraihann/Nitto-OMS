@@ -25,6 +25,7 @@ type Order = {
   cancel_return_reason: string | null;
   happiness_score: number | null;
   product_suggestions: string | null;
+  total_amount: number | null;
   order_items?: OrderItem[];
 };
 
@@ -93,7 +94,8 @@ export default function OrderDetailPage() {
     return <main style={{ maxWidth: 960, margin: '2rem auto', padding: '0 1rem' }}>Loading...</main>;
   }
 
-  const subtotal = (order.order_items ?? []).reduce((sum, item) => sum + item.quantity * item.unit_price, 0);
+  const computedSubtotal = (order.order_items ?? []).reduce((sum, item) => sum + item.quantity * item.unit_price, 0);
+  const subtotal = order.total_amount ?? computedSubtotal;
 
   return (
     <main style={{ maxWidth: 960, margin: '2rem auto', padding: '0 1rem' }}>
@@ -112,12 +114,12 @@ export default function OrderDetailPage() {
               <div style={{ color: '#666' }}>SKU: {item.sku}</div>
             </div>
             <div style={{ textAlign: 'right' }}>
-              <div>{item.quantity} × ${item.unit_price.toFixed(2)}</div>
-              <div style={{ color: '#666' }}>Line total: ${(item.quantity * item.unit_price).toFixed(2)}</div>
+              <div>{item.quantity} × ৳{item.unit_price.toFixed(2)}</div>
+              <div style={{ color: '#666' }}>Line total: ৳{(item.quantity * item.unit_price).toFixed(2)}</div>
             </div>
           </div>
         ))}
-        <div style={{ marginTop: '0.75rem', fontWeight: 700 }}>Subtotal: ${subtotal.toFixed(2)}</div>
+        <div style={{ marginTop: '0.75rem', fontWeight: 700 }}>Subtotal: ৳{subtotal.toFixed(2)}</div>
       </div>
 
       <div style={{ display: 'grid', gap: '0.75rem', marginTop: '1rem' }}>

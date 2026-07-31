@@ -18,6 +18,7 @@ type OrderRow = {
   confirmation_status: string;
   delivery_status: string;
   created_at: string;
+  total_amount: number | null;
   order_items: OrderItem[];
 };
 
@@ -68,10 +69,12 @@ export default async function OrdersPage({ searchParams }: OrdersPageProps) {
   const confirmation = getParam(searchParams?.confirmation_status);
   const delivery = getParam(searchParams?.delivery_status);
   const view = getParam(searchParams?.view);
+  const dateFrom = getParam(searchParams?.date_from);
+  const dateTo = getParam(searchParams?.date_to);
 
   let query = supabaseAdmin
     .from('orders')
-    .select('id, customer_name, urgency_status, confirmation_status, delivery_status, created_at, order_items(sku, product_name, quantity, unit_price)')
+    .select('id, customer_name, urgency_status, confirmation_status, delivery_status, created_at, total_amount, order_items(sku, product_name, quantity, unit_price)')
     .order('created_at', { ascending: false });
 
   if (view === 'ready-for-delivery') {
@@ -86,6 +89,15 @@ export default async function OrdersPage({ searchParams }: OrdersPageProps) {
     if (delivery) {
       query = query.eq('delivery_status', delivery);
     }
+  }
+
+  // dates are picked as plain calendar days; interpret them as Asia/Dhaka (UTC+6) local-day
+  // boundaries, matching how order timestamps were imported
+  if (dateFrom) {
+    query = query.gte('created_at', `${dateFrom}T00:00:00+06:00`);
+  }
+  if (dateTo) {
+    query = query.lte('created_at', `${dateTo}T23:59:59.999+06:00`);
   }
 
   let data: any[] | null = null;
@@ -130,10 +142,21 @@ export default async function OrdersPage({ searchParams }: OrdersPageProps) {
         <Link href={buildHref({ view: 'ready-for-delivery' })} style={{ padding: '0.35rem 0.6rem', border: '1px solid #ccc', textDecoration: 'none', color: '#111' }}>
           Ready for delivery
         </Link>
+        <Link href="/reports/products-by-date" style={{ padding: '0.35rem 0.6rem', border: '1px solid #ccc', textDecoration: 'none', color: '#111' }}>
+          Products by date report
+        </Link>
       </div>
 
-      <form action="/orders" method="get" style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginBottom: '1rem' }}>
+      <form action="/orders" method="get" style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center', marginBottom: '1rem' }}>
         <input type="hidden" name="view" value={view} />
+        <label style={{ display: 'flex', gap: '0.35rem', alignItems: 'center', fontSize: '0.9rem' }}>
+          From
+          <input type="date" name="date_from" defaultValue={dateFrom} />
+        </label>
+        <label style={{ display: 'flex', gap: '0.35rem', alignItems: 'center', fontSize: '0.9rem' }}>
+          To
+          <input type="date" name="date_to" defaultValue={dateTo} />
+        </label>
         <select name="urgency_status" defaultValue={urgency}>
           <option value="">All urgencies</option>
           <option value="normal">Normal</option>
@@ -165,7 +188,8 @@ export default async function OrdersPage({ searchParams }: OrdersPageProps) {
       <div style={{ display: 'grid', gap: '0.75rem' }}>
         {orders.map((order) => {
           const itemSummary = (order.order_items ?? []).map((item) => `${item.quantity} × ${item.sku || item.product_name}`).join(', ');
-          const subtotal = (order.order_items ?? []).reduce((sum, item) => sum + item.quantity * item.unit_price, 0);
+          const computedSubtotal = (order.order_items ?? []).reduce((sum, item) => sum + item.quantity * item.unit_price, 0);
+          const subtotal = order.total_amount ?? computedSubtotal;
           const rowStyle = order.urgency_status === 'urgent'
             ? { backgroundColor: '#ffe6e6' }
             : order.urgency_status === 'hold'
@@ -181,7 +205,7 @@ export default async function OrdersPage({ searchParams }: OrdersPageProps) {
                   <div style={{ color: '#666', marginTop: '0.2rem' }}>{new Date(order.created_at).toLocaleString()}</div>
                 </div>
                 <div style={{ textAlign: 'right' }}>
-                  <div style={{ fontWeight: 700 }}>Total: ${subtotal.toFixed(2)}</div>
+                  <div style={{ fontWeight: 700 }}>Total: ৳{subtotal.toFixed(2)}</div>
                   <div style={{ marginTop: '0.35rem', display: 'flex', gap: '0.35rem', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
                     <span style={{ ...statusBadgeStyle(order.urgency_status), borderRadius: '999px', padding: '0.25rem 0.6rem', textTransform: 'capitalize' }}>{order.urgency_status}</span>
                     <span style={{ ...statusBadgeStyle(order.confirmation_status), borderRadius: '999px', padding: '0.25rem 0.6rem', textTransform: 'capitalize' }}>{order.confirmation_status}</span>
