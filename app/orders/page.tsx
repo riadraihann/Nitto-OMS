@@ -168,6 +168,9 @@ export default async function OrdersPage({ searchParams }: OrdersPageProps) {
         <Link href="/reports/products-by-date" className="nav-pill">
           Products by date report
         </Link>
+        <Link href="/reports/attention-needed" className="nav-pill">
+          Attention Needed
+        </Link>
       </div>
 
       <form action="/orders" method="get" style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center', marginBottom: '1rem' }}>

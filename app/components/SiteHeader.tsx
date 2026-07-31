@@ -7,6 +7,7 @@ const navItems = [
   { href: '/orders', label: 'Orders' },
   { href: '/orders/new', label: 'Add order' },
   { href: '/reports/products-by-date', label: 'Products report' },
+  { href: '/reports/attention-needed', label: 'Attention Needed' },
 ];
 
 export default function SiteHeader() {
