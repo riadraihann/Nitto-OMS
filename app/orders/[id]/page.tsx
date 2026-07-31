@@ -12,6 +12,16 @@ type OrderItem = {
   unit_price: number;
 };
 
+type HistoryEntry = {
+  id: number;
+  field: string;
+  old_value: string | null;
+  new_value: string | null;
+  source: string;
+  actor: string | null;
+  changed_at: string;
+};
+
 type Order = {
   id: number;
   order_number: string | null;
@@ -39,9 +49,24 @@ export default function OrderDetailPage() {
   const [order, setOrder] = useState<Order | null>(null);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
+  const [history, setHistory] = useState<HistoryEntry[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(true);
   // set only while a vu/d type is picked but no day has been committed yet -- keeps the
   // select showing the just-picked type even though nothing's saved
   const [pendingUrgencyType, setPendingUrgencyType] = useState<string | null>(null);
+
+  const loadHistory = async () => {
+    setHistoryLoading(true);
+    try {
+      const response = await fetch(`/api/orders/history?id=${id}`);
+      const result = await response.json();
+      if (result?.data) {
+        setHistory(result.data);
+      }
+    } finally {
+      setHistoryLoading(false);
+    }
+  };
 
   useEffect(() => {
     const loadOrder = async () => {
@@ -54,7 +79,9 @@ export default function OrderDetailPage() {
 
     if (id) {
       loadOrder();
+      loadHistory();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
   const updateField = async (field: keyof Order, value: string | number | null) => {
@@ -80,6 +107,7 @@ export default function OrderDetailPage() {
     }
 
     setMessage(result.sheetSyncWarning || 'Saved');
+    loadHistory();
   };
 
   const saveUrgency = async (type: string, day?: number) => {
@@ -106,6 +134,7 @@ export default function OrderDetailPage() {
     setOrder((prev) => (prev ? { ...prev, urgency_type: result.data.urgency_type, urgency_target_date: result.data.urgency_target_date } : prev));
     setPendingUrgencyType(null);
     setMessage(result.sheetSyncWarning || 'Saved');
+    loadHistory();
   };
 
   const handleUrgencyTypeChange = async (newType: string) => {
@@ -132,6 +161,27 @@ export default function OrderDetailPage() {
     const day = Number(rawDay);
     if (!Number.isFinite(day)) return;
     await saveUrgency(type, day);
+  };
+
+  const STATUS_FIELDS = new Set(['confirmation_status', 'delivery_status', 'urgency_type']);
+  const SOURCE_LABELS: Record<string, string> = { moderator: 'Staff edit', sheet_sync: 'Sheet sync', csv_import: 'CSV import', system: 'System' };
+  const FIELD_LABELS: Record<string, string> = {
+    order_created: 'Order created',
+    order_items: 'Items',
+    removed_from_sheet_at: 'Removed from sheet',
+    urgency_target_date: 'Urgency target date',
+  };
+
+  const formatHistoryField = (field: string) => FIELD_LABELS[field] ?? statusLabel(field);
+
+  const formatHistoryValue = (field: string, value: string | null) => {
+    if (value === null || value === '') return '(empty)';
+    if (STATUS_FIELDS.has(field)) return statusLabel(value);
+    if (field === 'changed_at' || field === 'removed_from_sheet_at' || field === 'created_at') {
+      const parsed = new Date(value);
+      return Number.isNaN(parsed.getTime()) ? value : parsed.toLocaleString();
+    }
+    return value;
   };
 
   const bumpConfirmation = async () => {
@@ -276,6 +326,38 @@ export default function OrderDetailPage() {
 
       {saving ? <p>Saving...</p> : null}
       {message ? <p>{message}</p> : null}
+
+      <div style={{ border: '1px solid #ddd', borderRadius: '12px', padding: '1rem', marginTop: '1.5rem' }}>
+        <h2 style={{ marginTop: 0 }}>History</h2>
+        {historyLoading ? (
+          <p style={{ color: '#666' }}>Loading history...</p>
+        ) : history.length === 0 ? (
+          <p style={{ color: '#666' }}>No changes recorded yet.</p>
+        ) : (
+          <div style={{ display: 'grid', gap: '0.5rem' }}>
+            {history.map((entry) => (
+              <div key={entry.id} style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', padding: '0.5rem 0', borderBottom: '1px solid #f0f0f0', fontSize: '0.9rem' }}>
+                <div>
+                  <strong>{formatHistoryField(entry.field)}</strong>
+                  {entry.field === 'order_created' || entry.field === 'order_items' || entry.field === 'removed_from_sheet_at' ? (
+                    <span>: {formatHistoryValue(entry.field, entry.new_value)}</span>
+                  ) : (
+                    <span>
+                      {' '}changed from <em>{formatHistoryValue(entry.field, entry.old_value)}</em> to{' '}
+                      <em>{formatHistoryValue(entry.field, entry.new_value)}</em>
+                    </span>
+                  )}
+                  <div style={{ color: '#666', fontSize: '0.8rem', marginTop: '0.15rem' }}>
+                    {SOURCE_LABELS[entry.source] ?? entry.source}
+                    {entry.actor ? ` · ${entry.actor}` : ''}
+                  </div>
+                </div>
+                <div style={{ color: '#666', whiteSpace: 'nowrap' }}>{new Date(entry.changed_at).toLocaleString()}</div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </main>
   );
 }

@@ -1,5 +1,22 @@
 import { supabaseAdmin } from '@/lib/supabase';
 import { parseSheetRow } from '@/lib/sheetRowParser.mjs';
+import { diffOrderFields, summarizeItems } from '@/lib/orderHistory.mjs';
+
+type HistoryEntry = { order_id: number; field: string; old_value: string | null; new_value: string | null; source: string };
+
+// Sync passes can touch hundreds of orders, which is exactly what made "Sync Now" slow before
+// (see scalarFieldsChanged/itemsChanged above) -- so history rows are collected in memory across
+// the whole pass and written in one batched insert at the end, not one insert per order.
+async function flushHistory(entries: HistoryEntry[]): Promise<void> {
+  if (!supabaseAdmin || entries.length === 0) return;
+  const CHUNK = 500;
+  for (let i = 0; i < entries.length; i += CHUNK) {
+    const { error } = await supabaseAdmin.from('order_history').insert(entries.slice(i, i + CHUNK));
+    if (error) {
+      console.error('order_history batch insert failed', error.message);
+    }
+  }
+}
 
 type ParsedRow = {
   order_number: string;
@@ -151,6 +168,7 @@ export async function reconcileSheetRows(rows: unknown[]): Promise<ReconcileResu
   let unchanged = 0;
   const errors: { order_number: string; error: string }[] = [];
   const nowIso = new Date().toISOString();
+  const historyEntries: HistoryEntry[] = [];
 
   for (const [orderNumber, parsed] of Array.from(parsedByOrderNumber.entries())) {
     const {
@@ -210,9 +228,23 @@ export async function reconcileSheetRows(rows: unknown[]): Promise<ReconcileResu
           errors.push({ order_number: orderNumber, error: updateError.message });
           continue;
         }
+
+        // created_at is compared by parsed Date value elsewhere (scalarFieldsChanged) since the
+        // sheet's format and the DB's stored ISO string differ even when logically identical --
+        // excluded here from the plain string diff to avoid a false "changed" entry every pass.
+        const changedFields = Object.keys(sheetOwnedFields).concat(Object.keys(update)).filter((field) => field !== 'created_at');
+        for (const change of diffOrderFields(existing, { ...sheetOwnedFields, ...update }, changedFields)) {
+          historyEntries.push({ order_id: existing.id, source: 'sheet_sync', ...change });
+        }
+        if (new Date(sheetOwnedFields.created_at as string).getTime() !== new Date(existing.created_at).getTime()) {
+          historyEntries.push({ order_id: existing.id, field: 'created_at', old_value: existing.created_at, new_value: sheetOwnedFields.created_at as string, source: 'sheet_sync' });
+        }
       }
 
       if (needsItemsUpdate) {
+        const oldItemsSummary = summarizeItems(existing.order_items);
+        const newItemsSummary = summarizeItems(items);
+
         const { error: deleteItemsError } = await supabaseAdmin.from('order_items').delete().eq('order_id', existing.id);
         if (deleteItemsError) {
           errors.push({ order_number: orderNumber, error: deleteItemsError.message });
@@ -225,6 +257,10 @@ export async function reconcileSheetRows(rows: unknown[]): Promise<ReconcileResu
         if (insertItemsError) {
           errors.push({ order_number: orderNumber, error: insertItemsError.message });
           continue;
+        }
+
+        if (oldItemsSummary !== newItemsSummary) {
+          historyEntries.push({ order_id: existing.id, field: 'order_items', old_value: oldItemsSummary, new_value: newItemsSummary, source: 'sheet_sync' });
         }
       }
 
@@ -263,6 +299,8 @@ export async function reconcileSheetRows(rows: unknown[]): Promise<ReconcileResu
         continue;
       }
 
+      historyEntries.push({ order_id: newOrder.id, field: 'order_created', old_value: null, new_value: `Created via sheet sync (order_number ${orderNumber})`, source: 'sheet_sync' });
+
       created += 1;
     }
   }
@@ -292,9 +330,14 @@ export async function reconcileSheetRows(rows: unknown[]): Promise<ReconcileResu
         errors.push({ order_number: '(removed-flag pass)', error: removeError.message });
       } else {
         removed = missingIds.length;
+        for (const id of missingIds) {
+          historyEntries.push({ order_id: id, field: 'removed_from_sheet_at', old_value: null, new_value: nowIso, source: 'sheet_sync' });
+        }
       }
     }
   }
+
+  await flushHistory(historyEntries);
 
   return {
     ok: true,

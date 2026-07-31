@@ -3,6 +3,7 @@ import { supabaseAdmin } from '@/lib/supabase';
 import { normalizeUrgencyFields } from '@/lib/urgencyTarget.mjs';
 import { buildColumnC } from '@/lib/sheetRowParser.mjs';
 import { writeColumnC } from '@/lib/sheetWriteBack';
+import { diffOrderFields, logOrderHistory } from '@/lib/orderHistory.mjs';
 
 // normalizeUrgencyFields always resolves urgency_type changes down to these two keys (plus
 // confirmation_status passes through untouched) -- checking for these after normalization is
@@ -79,6 +80,13 @@ export async function POST(request: Request) {
       }
     }
 
+    await logOrderHistory(
+      supabaseAdmin,
+      order.id,
+      [{ field: 'order_created', old_value: null, new_value: `Created manually (${order.order_source})` }],
+      'moderator',
+    );
+
     return NextResponse.json({ ok: true, data: { order, items: normalizedItems } });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error';
@@ -107,11 +115,25 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ ok: false, error: normalized.error }, { status: 400 });
     }
 
+    const updatedFields = Object.keys(normalized.payload);
+    const { data: before, error: beforeError } = await supabaseAdmin
+      .from('orders')
+      .select(updatedFields.join(','))
+      .eq('id', id)
+      .single();
+
+    if (beforeError) {
+      return NextResponse.json({ ok: false, error: beforeError.message }, { status: 500 });
+    }
+
     const { data, error } = await supabaseAdmin.from('orders').update(normalized.payload).eq('id', id).select().single();
 
     if (error) {
       return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
     }
+
+    const changes = diffOrderFields(before, data, updatedFields);
+    await logOrderHistory(supabaseAdmin, id, changes, 'moderator');
 
     let sheetSyncWarning: string | undefined;
     const touchedSheetSyncedField = Object.keys(normalized.payload).some((key) => SHEET_SYNCED_FIELDS.includes(key));
