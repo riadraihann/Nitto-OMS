@@ -222,6 +222,144 @@ label {
 }
 
 /* ---------------------------------------------------------------------------------------
+   Dense table -- Orders and Call Pending (the two highest-traffic, most-scanned views)
+   render as a single-line-per-order table instead of the tall .order-row card, so 10+ rows
+   fit on screen without scrolling. Needs Review keeps the taller .order-row card (its flag
+   reasons + resolve/ignore actions need more vertical room than a table cell can hold).
+   table-layout: fixed + a percentage colgroup guarantees the table always fits its
+   container's width exactly, so truncated cells (address/items) never force a horizontal
+   scrollbar on their own -- the .order-row/.order-row--urgent/.order-row--hold classes
+   above are reused as-is on <tr> for the same urgency-based row tinting.
+   --------------------------------------------------------------------------------------- */
+.orders-table-wrap {
+  overflow-x: auto;
+}
+
+.orders-table {
+  width: 100%;
+  table-layout: fixed;
+  border-collapse: collapse;
+  font-size: 0.78rem;
+  /* the Inter variable font's "normal" line-height computes much taller than its 1.2x-ish
+     visual size (large internal line-gap metrics) -- pinning an explicit ratio here is what
+     actually keeps rows compact; leaving this at "normal" was blowing every row up to ~54px
+     regardless of padding tuning. */
+  line-height: 1.25;
+}
+
+.orders-table th {
+  text-align: left;
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  color: var(--text-muted);
+  font-weight: 600;
+  padding: 0.3rem 0.45rem;
+  border-bottom: 1px solid var(--card-border);
+}
+
+.orders-table td {
+  padding: 0.3rem 0.45rem;
+  border-bottom: 1px solid var(--card-border);
+  vertical-align: middle;
+  overflow: hidden;
+}
+
+.orders-table-truncate {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.orders-table .customer-name {
+  font-weight: 600;
+  font-size: 0.8rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.orders-table .customer-phone {
+  display: block;
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Compact pill-style <select> -- same color-coded pill look as the full-size card's badges,
+   but small enough to fit inside a dense table row instead of the browser's default control
+   height. */
+.pill-select {
+  display: block;
+  max-width: 100%;
+  border: none;
+  border-radius: 999px;
+  padding: 0.12rem 0.45rem;
+  font-size: 0.7rem;
+  font-weight: 600;
+  line-height: 1.4;
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pill-select:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--orchid-tint);
+}
+
+.attempt-mini-btn {
+  min-width: 1.3rem;
+  height: 1.1rem;
+  padding: 0 0.2rem;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: #fff;
+  color: var(--text-muted);
+  font-size: 0.65rem;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.attempt-mini-btn:hover:not(:disabled) {
+  background: var(--navy-tint);
+  color: var(--navy);
+}
+
+.attempt-mini-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.6rem;
+  height: 1.6rem;
+  flex-shrink: 0;
+  padding: 0;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: #fff;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.icon-btn:hover {
+  background: #f0f1f4;
+}
+
+.icon-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* ---------------------------------------------------------------------------------------
    App shell: persistent left sidebar + light-gray content area. The sidebar is `position:
    sticky` (not fixed) so it scrolls the normal document flow but stays pinned once it hits
    the viewport top -- avoids the extra fixed-position stacking-context/z-index bookkeeping

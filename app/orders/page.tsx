@@ -203,7 +203,7 @@ export default async function OrdersPage({ searchParams }: OrdersPageProps) {
         </Link>
       </div>
 
-      <div className="card">
+      <div className="card" style={view === 'call-pending' ? { padding: 'var(--space-2) var(--space-4)' } : undefined}>
         <form action="/orders" method="get" style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
           <input type="hidden" name="view" value={view} />
           <label style={{ display: 'flex', gap: '0.35rem', alignItems: 'center', fontSize: '0.9rem' }}>
@@ -243,27 +243,27 @@ export default async function OrdersPage({ searchParams }: OrdersPageProps) {
           <Link href="/orders" className="nav-pill">
             Clear
           </Link>
+          {view === 'call-pending' ? (
+            <>
+              <span style={{ color: '#666', fontSize: '0.85rem', marginLeft: '0.25rem' }}>Sort:</span>
+              <Link href={buildHref({ view: 'call-pending', sort: 'date' })} className={`nav-pill${sort !== 'stage' ? ' active' : ''}`}>
+                Date
+              </Link>
+              <Link href={buildHref({ view: 'call-pending', sort: 'stage' })} className={`nav-pill${sort === 'stage' ? ' active' : ''}`}>
+                Confirmation stage
+              </Link>
+            </>
+          ) : null}
         </form>
-
-        {view === 'call-pending' ? (
-          <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', marginTop: 'var(--space-3)', fontSize: '0.9rem' }}>
-            <span style={{ color: '#666' }}>Sort by:</span>
-            <Link href={buildHref({ view: 'call-pending', sort: 'date' })} className={`nav-pill${sort !== 'stage' ? ' active' : ''}`}>
-              Date (newest first)
-            </Link>
-            <Link href={buildHref({ view: 'call-pending', sort: 'stage' })} className={`nav-pill${sort === 'stage' ? ' active' : ''}`}>
-              Confirmation stage
-            </Link>
-          </div>
-        ) : null}
       </div>
 
       {callPendingStats ? (
-        <div className="card">
+        <div className="card" style={{ padding: 'var(--space-2) var(--space-3)' }}>
           <div className="stat-grid">
-            <StatTile label="Active attempts" value={callPendingStats.activeAttempts} sublabel="X1/X2/X3, Unreachable, or Phone off logged" />
-            <StatTile label="Fully pending" value={callPendingStats.fullyPending} sublabel="No attempts logged yet" />
+            <StatTile dense label="Active attempts" value={callPendingStats.activeAttempts} sublabel="X1/X2/X3, Unreachable, or Phone off logged" />
+            <StatTile dense label="Fully pending" value={callPendingStats.fullyPending} sublabel="No attempts logged yet" />
             <StatTile
+              dense
               label="Today's confirmation rate"
               value={
                 callPendingStats.confirmationRate.denominator > 0
@@ -281,7 +281,7 @@ export default async function OrdersPage({ searchParams }: OrdersPageProps) {
         </div>
       ) : null}
 
-      <div className="card">
+      <div className="card" style={view === '' || view === 'call-pending' ? { paddingTop: 'var(--space-2)' } : undefined}>
         <OrdersList
           orders={orders}
           view={view}

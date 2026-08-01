@@ -24,7 +24,7 @@ export default function PaginationBar({ page, pageSize, totalCount, visibleCount
   const countText = totalCount === 0 ? `Showing 0 ${itemLabel}` : `Showing ${rangeStart}-${rangeEnd} of ${totalCount} ${itemLabel}`;
 
   if (variant === 'compact') {
-    return <div style={{ fontSize: '0.9rem', fontWeight: 600, marginBottom: '0.75rem' }}>{countText}</div>;
+    return <div style={{ fontSize: '0.9rem', fontWeight: 600, marginBottom: '0.5rem', lineHeight: 1.3 }}>{countText}</div>;
   }
 
   return (

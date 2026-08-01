@@ -14,13 +14,23 @@ type StatTileProps = {
   value: string | number;
   sublabel?: string;
   accent?: Accent;
+  // Call Pending's header stats sit directly above the dense orders table, which needs every
+  // spare pixel of vertical room it can get -- `dense` shrinks padding/value size for that one
+  // spot without changing the home dashboard's (larger, more prominent) stat cards.
+  dense?: boolean;
 };
 
-export default function StatTile({ label, value, sublabel, accent = 'default' }: StatTileProps) {
+export default function StatTile({ label, value, sublabel, accent = 'default', dense = false }: StatTileProps) {
   return (
-    <div className="stat-tile">
+    <div className="stat-tile" style={dense ? { padding: 'var(--space-2) var(--space-3)' } : undefined}>
       <div className="stat-tile-label">{label}</div>
-      <div className="stat-tile-value" style={accent !== 'default' ? { color: ACCENT_COLORS[accent] } : undefined}>
+      <div
+        className="stat-tile-value"
+        style={{
+          ...(dense ? { fontSize: '1.3rem', marginTop: '0.1rem' } : undefined),
+          ...(accent !== 'default' ? { color: ACCENT_COLORS[accent] } : undefined),
+        }}
+      >
         {value}
       </div>
       {sublabel ? <div className="stat-tile-sub">{sublabel}</div> : null}

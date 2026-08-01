@@ -43,6 +43,18 @@ type OrderRow = {
   contact_attempts: ContactAttempt[];
 };
 
+// Minimal inline icon (feather-icons-style path) for the dense table's Open action -- no icon
+// library dependency for one glyph.
+function OpenIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+      <polyline points="15 3 21 3 21 9" />
+      <line x1="10" y1="14" x2="21" y2="3" />
+    </svg>
+  );
+}
+
 type OrdersListProps = {
   orders: OrderRow[];
   view: string;
@@ -63,6 +75,11 @@ export default function OrdersList({ orders: initialOrders, view, bucket, totalC
   // Call Pending/Needs Review use. Also drops urgency-based row coloring entirely, since
   // urgency is a live-workflow concern that doesn't apply to orders already done.
   const compact = bucket === 'history' || view === 'cancelled' || view === 'archived';
+  // Orders (default view, incl. any urgency/confirmation/delivery filters) and Call Pending --
+  // the two highest-traffic, most-scanned views -- get the dense single-line-per-order table.
+  // Needs Review keeps the taller .order-row card below: its flag reasons + resolve/ignore
+  // actions need more room per row than a table cell can hold.
+  const isTableView = !compact && (view === '' || view === 'call-pending');
   const [orders, setOrders] = useState(initialOrders);
   // Local copy so instant client-side row removals (archiving, a delivery_status edit that
   // crosses the active/history boundary, a Call Pending row getting confirmed) can decrement
@@ -405,7 +422,7 @@ export default function OrdersList({ orders: initialOrders, view, bucket, totalC
         pageSizeHrefs={pageSizeHrefs}
       />
 
-      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.75rem', flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.5rem', flexWrap: 'wrap' }}>
         <label style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.9rem' }}>
           <input type="checkbox" checked={allSelected} onChange={toggleAll} />
           Select all on this page
@@ -426,6 +443,180 @@ export default function OrdersList({ orders: initialOrders, view, bucket, totalC
         {syncError ? <span style={{ color: '#c62828', fontSize: '0.9rem' }}>{syncError}</span> : null}
       </div>
 
+      {isTableView ? (
+        <div className="orders-table-wrap">
+          <table className="orders-table">
+            <colgroup>
+              <col style={{ width: '3%' }} />
+              <col style={{ width: '9%' }} />
+              <col style={{ width: '13%' }} />
+              <col style={{ width: '16%' }} />
+              <col style={{ width: '13%' }} />
+              <col style={{ width: '11%' }} />
+              <col style={{ width: '13%' }} />
+              <col style={{ width: '10%' }} />
+              <col style={{ width: '7%' }} />
+              <col style={{ width: '5%' }} />
+            </colgroup>
+            <thead>
+              <tr>
+                <th></th>
+                <th>Order</th>
+                <th>Customer</th>
+                <th>Address</th>
+                <th>Items</th>
+                <th>Urgency</th>
+                <th>Status</th>
+                <th>Delivery</th>
+                <th style={{ textAlign: 'right' }}>Total</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {orders.map((order) => {
+                const items = order.order_items ?? [];
+                const itemSummary = items.map((item) => `${item.quantity} × ${item.sku || item.product_name}`).join(', ');
+                const computedSubtotal = items.reduce((sum, item) => sum + item.quantity * item.unit_price, 0);
+                const subtotal = order.total_amount ?? computedSubtotal;
+                const totalQty = items.reduce((sum, item) => sum + item.quantity, 0);
+                const itemsShort =
+                  items.length === 0
+                    ? 'No items'
+                    : items.length === 1
+                      ? `${items[0].quantity} × ${items[0].sku || items[0].product_name}`
+                      : `${items[0].sku || items[0].product_name} +${items.length - 1} more`;
+
+                const rowClassName =
+                  order.urgency_type === 'urgent' || order.urgency_type === 'vu'
+                    ? 'order-row order-row--urgent'
+                    : order.urgency_type === 'hold'
+                      ? 'order-row order-row--hold'
+                      : 'order-row';
+                const displayedUrgencyType = pendingUrgencyType[order.id] ?? order.urgency_type;
+                const attemptsDisplay = formatAttemptsForDisplay(order.contact_attempts);
+                const isTerminal = isTerminalConfirmationStatus(order.confirmation_status);
+                const rowIssue = rowErrors[order.id] || rowWarnings[order.id];
+
+                return (
+                  <tr key={order.id} className={rowClassName}>
+                    <td>
+                      <input type="checkbox" checked={selected.has(order.id)} onChange={() => toggleOne(order.id)} />
+                    </td>
+                    <td>
+                      <div className="customer-name">{order.order_number ?? `#${order.id}`}</div>
+                      <span className="customer-phone">{formatDhakaDateTime(order.created_at)}</span>
+                    </td>
+                    <td>
+                      <div className="customer-name">{order.customer_name}</div>
+                      <a href={telHref(order.phone)} className="customer-phone">{order.phone}</a>
+                    </td>
+                    <td className="orders-table-truncate" title={order.address}>
+                      {order.address}
+                    </td>
+                    <td className="orders-table-truncate" title={itemSummary || 'No items'}>
+                      {itemsShort}
+                      {items.length > 0 ? <span style={{ color: 'var(--text-muted)' }}> ({totalQty})</span> : null}
+                    </td>
+                    <td>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', flexWrap: 'nowrap' }}>
+                        <select
+                          className="pill-select"
+                          value={displayedUrgencyType}
+                          onChange={(e) => handleUrgencyTypeChange(order.id, e.target.value)}
+                          style={{ ...statusBadgeStyle(displayedUrgencyType), display: 'inline-block', flexShrink: 1, minWidth: 0 }}
+                        >
+                          {urgencyTypeOptions.map((type) => (
+                            <option key={type} value={type}>{urgencyTypeOptionLabel(type)}</option>
+                          ))}
+                        </select>
+                        {displayedUrgencyType === 'vu' || displayedUrgencyType === 'd' ? (
+                          <input
+                            type="number"
+                            min="1"
+                            max="31"
+                            placeholder="Day"
+                            key={`${order.id}-${order.urgency_target_date ?? 'unset'}`}
+                            defaultValue={order.urgency_target_date ? new Date(order.urgency_target_date).getUTCDate() : ''}
+                            onBlur={(e) => handleUrgencyDayCommit(order.id, displayedUrgencyType, e.target.value)}
+                            onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }}
+                            style={{ width: '3rem', fontSize: '0.68rem', padding: '0.1rem 0.3rem', flexShrink: 0 }}
+                          />
+                        ) : null}
+                      </div>
+                    </td>
+                    <td>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', flexWrap: 'nowrap' }}>
+                        <select
+                          className="pill-select"
+                          value={order.confirmation_status}
+                          onChange={(e) => updateField(order.id, 'confirmation_status', e.target.value)}
+                          style={{ ...statusBadgeStyle(order.confirmation_status), display: 'inline-block', flexShrink: 1, minWidth: 0 }}
+                          title={attemptsDisplay || undefined}
+                        >
+                          {confirmationStatusOptions.map((step) => (
+                            <option key={step} value={step}>{statusLabel(step)}</option>
+                          ))}
+                        </select>
+                        {!isTerminal ? (
+                          <div style={{ display: 'flex', gap: '0.15rem', flexShrink: 0 }}>
+                            {ATTEMPT_TYPES.map((type) => {
+                              const count = order.contact_attempts.find((a) => a.type === type)?.count ?? 0;
+                              const max = ATTEMPT_MAX[type as keyof typeof ATTEMPT_MAX];
+                              const capped = count >= max;
+                              const loading = attemptLoggingIds.has(`${order.id}:${type}`);
+                              return (
+                                <button
+                                  key={type}
+                                  type="button"
+                                  className="attempt-mini-btn"
+                                  onClick={() => logAttempt(order.id, type)}
+                                  disabled={capped || loading}
+                                  title={`${capped ? `${ATTEMPT_TYPE_LABELS[type]} is capped at ${max}` : `Log a ${ATTEMPT_TYPE_LABELS[type]} attempt`}${count > 0 ? ` -- currently ${count}` : ''}`}
+                                >
+                                  {ATTEMPT_TYPE_LABELS[type][0]}
+                                  {count > 0 ? count : ''}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        ) : null}
+                      </div>
+                    </td>
+                    <td>
+                      <select
+                        className="pill-select"
+                        value={order.delivery_status}
+                        onChange={(e) => updateField(order.id, 'delivery_status', e.target.value)}
+                        style={statusBadgeStyle(order.delivery_status)}
+                      >
+                        {deliveryOptions.map((step) => (
+                          <option key={step} value={step}>{statusLabel(step)}</option>
+                        ))}
+                      </select>
+                    </td>
+                    <td style={{ textAlign: 'right', fontWeight: 700, whiteSpace: 'nowrap' }}>৳{subtotal.toFixed(2)}</td>
+                    <td>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                        {/* Archive/Restore isn't offered here -- it lives on the order detail page only;
+                            this dense row doesn't have room for it alongside everything else. */}
+                        <Link href={`/orders/${order.id}`} className="icon-btn" title="Open order" aria-label="Open order">
+                          <OpenIcon />
+                        </Link>
+                        {savingIds.has(order.id) ? <span title="Saving..." style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>⋯</span> : null}
+                        {rowIssue ? (
+                          <span title={rowIssue} style={{ fontSize: '0.8rem', color: rowErrors[order.id] ? '#c62828' : '#ef6c00', cursor: 'help' }}>
+                            ⚠
+                          </span>
+                        ) : null}
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      ) : (
       <div style={compact ? { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(230px, 1fr))', gap: 'var(--space-3)' } : { display: 'grid', gap: '0.75rem' }}>
         {orders.map((order) => {
           const itemSummary = (order.order_items ?? []).map((item) => `${item.quantity} × ${item.sku || item.product_name}`).join(', ');
@@ -620,6 +811,7 @@ export default function OrdersList({ orders: initialOrders, view, bucket, totalC
           );
         })}
       </div>
+      )}
 
       <PaginationBar
         variant="full"
