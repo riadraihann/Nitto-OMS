@@ -252,7 +252,12 @@ label {
 .app-sidebar {
   width: var(--sidebar-width);
   flex-shrink: 0;
-  min-height: calc(100vh - var(--topbar-height));
+  /* a cap, not a floor -- min-height here would let the box grow taller than the viewport
+     when nav content is long, which left overflow-y with nothing to actually scroll against
+     (the bug this fixes: Feedback Report and anything below it got clipped with no way to
+     reach it on a shorter window). This is exactly one viewport's worth of height, netting out
+     the top banner it's stacked below. */
+  height: calc(100vh - var(--topbar-height));
   position: sticky;
   top: var(--topbar-height);
   align-self: flex-start;
@@ -260,7 +265,9 @@ label {
   color: #fff;
   display: flex;
   flex-direction: column;
-  overflow-y: auto;
+  /* the sidebar itself doesn't scroll as one unit -- .sidebar-nav below does, so the logo stays
+     pinned at top and Settings/Sign out stay pinned at the bottom regardless of nav length */
+  overflow: hidden;
 }
 
 .app-main {
@@ -427,6 +434,11 @@ label {
 
 .sidebar-nav {
   flex: 1;
+  /* the flexbox default min-height is auto, which would let this item's content push it (and
+     its .app-sidebar parent) taller than the space available instead of scrolling -- 0 lets it
+     actually shrink to fit, so overflow-y below has something real to clip against */
+  min-height: 0;
+  overflow-y: auto;
   padding: 0 var(--space-2) var(--space-4);
   display: flex;
   flex-direction: column;
