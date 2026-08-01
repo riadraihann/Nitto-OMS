@@ -3,6 +3,8 @@ import { supabaseAdmin } from '@/lib/supabase';
 import { CALL_PENDING_STAGES, HISTORY_DELIVERY_STATUSES, confirmationStatusOptions, statusLabel } from '@/lib/theme';
 import { PAGE_SIZE_OPTIONS, parsePageParams, rangeFor, buildQueryHref } from '@/lib/pagination';
 import { getVisibleNeedsReviewReasons } from '@/lib/needsReviewFlags';
+import { computeCallPendingStats } from '@/lib/callPendingStats';
+import StatTile from '@/app/components/StatTile';
 import OrdersList from './OrdersList';
 
 export const dynamic = 'force-dynamic';
@@ -149,7 +151,10 @@ export default async function OrdersPage({ searchParams }: OrdersPageProps) {
   }
 
   const rawOrders = (data ?? []) as Omit<OrderRow, 'visible_needs_review_reasons'>[];
-  const visibleReasonsByOrder = await getVisibleNeedsReviewReasons(supabaseAdmin, rawOrders);
+  const [visibleReasonsByOrder, callPendingStats] = await Promise.all([
+    getVisibleNeedsReviewReasons(supabaseAdmin, rawOrders),
+    view === 'call-pending' ? computeCallPendingStats() : Promise.resolve(null),
+  ]);
   let orders: OrderRow[] = rawOrders.map((order) => ({
     ...order,
     visible_needs_review_reasons: visibleReasonsByOrder.get(order.id) ?? [],
@@ -252,6 +257,29 @@ export default async function OrdersPage({ searchParams }: OrdersPageProps) {
           </div>
         ) : null}
       </div>
+
+      {callPendingStats ? (
+        <div className="card">
+          <div className="stat-grid">
+            <StatTile label="Active attempts" value={callPendingStats.activeAttempts} sublabel="X1/X2/X3, Unreachable, or Phone off logged" />
+            <StatTile label="Fully pending" value={callPendingStats.fullyPending} sublabel="No attempts logged yet" />
+            <StatTile
+              label="Today's confirmation rate"
+              value={
+                callPendingStats.confirmationRate.denominator > 0
+                  ? `${Math.round((callPendingStats.confirmationRate.numerator / callPendingStats.confirmationRate.denominator) * 100)}%`
+                  : '—'
+              }
+              sublabel={
+                callPendingStats.confirmationRate.denominator > 0
+                  ? `confirmed today (${callPendingStats.confirmationRate.numerator}/${callPendingStats.confirmationRate.denominator})`
+                  : 'No confirmation activity yet today'
+              }
+              accent="good"
+            />
+          </div>
+        </div>
+      ) : null}
 
       <div className="card">
         <OrdersList

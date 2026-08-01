@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 
-type CountKey = 'needsReview' | 'attentionNeeded' | 'cancelled';
+type CountKey = 'needsReview' | 'attentionNeeded' | 'cancelled' | 'orders' | 'history' | 'callPending';
 
 type NavItem = { href: string; label: string; countKey?: CountKey };
 
@@ -16,9 +16,9 @@ const navGroups: NavGroup[] = [
   {
     heading: 'Workflow',
     items: [
-      { href: '/orders', label: 'Orders' },
-      { href: '/orders?view=call-pending', label: 'Call Pending' },
-      { href: '/history', label: 'History' },
+      { href: '/orders', label: 'Orders', countKey: 'orders' },
+      { href: '/orders?view=call-pending', label: 'Call Pending', countKey: 'callPending' },
+      { href: '/history', label: 'History', countKey: 'history' },
       { href: '/orders?view=cancelled', label: 'Cancelled', countKey: 'cancelled' },
     ],
   },
@@ -46,17 +46,24 @@ export default function Sidebar({ role }: SidebarProps) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const router = useRouter();
-  const [counts, setCounts] = useState<{ needsReview: number; attentionNeeded: number; cancelled: number } | null>(null);
+  const [counts, setCounts] = useState<Record<CountKey, number> | null>(null);
   const [signingOut, setSigningOut] = useState(false);
 
   useEffect(() => {
     if (!role) return;
     let cancelled = false;
-    fetch('/api/flags/counts')
+    fetch('/api/sidebar/counts')
       .then((res) => res.json())
       .then((result) => {
         if (!cancelled && result?.ok) {
-          setCounts({ needsReview: result.needsReview, attentionNeeded: result.attentionNeeded, cancelled: result.cancelled });
+          setCounts({
+            needsReview: result.needsReview,
+            attentionNeeded: result.attentionNeeded,
+            cancelled: result.cancelled,
+            orders: result.orders,
+            history: result.history,
+            callPending: result.callPending,
+          });
         }
       })
       .catch(() => {});

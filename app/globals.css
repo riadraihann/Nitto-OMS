@@ -577,6 +577,46 @@ label {
 }
 
 /* ---------------------------------------------------------------------------------------
+   Stat tiles: compact at-a-glance numbers (Call Pending header stats, home dashboard).
+   Shared by app/components/StatTile.tsx -- one definition, reused everywhere a KPI-style
+   number needs to render instead of a full chart.
+   --------------------------------------------------------------------------------------- */
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: var(--space-3);
+}
+
+.stat-tile {
+  background: #fff;
+  border: 1px solid var(--card-border);
+  border-radius: var(--card-radius);
+  padding: var(--space-3) var(--space-4);
+}
+
+.stat-tile-label {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.stat-tile-value {
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: var(--text);
+  margin-top: var(--space-1);
+  line-height: 1.2;
+}
+
+.stat-tile-sub {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  margin-top: var(--space-1);
+}
+
+/* ---------------------------------------------------------------------------------------
    History's distinct treatment: a muted/grayscale accent (instead of navy/orchid) plus a
    banner that stays visible mid-scroll, so /history never reads as just another /orders view.
    --------------------------------------------------------------------------------------- */

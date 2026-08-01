@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { statusBadgeStyle, statusLabel, confirmationStatusOptions, deliveryOptions, urgencyTypeOptions, urgencyTypeOptionLabel, urgencyLabel, telHref } from '@/lib/theme';
 import { NEEDS_REVIEW_REASON_LABELS, countWords, FEEDBACK_MAX_WORDS } from '@/lib/orderValidation.mjs';
 import { ATTEMPT_TYPES, ATTEMPT_MAX, ATTEMPT_TYPE_LABELS, isTerminalConfirmationStatus, formatAttemptsForDisplay } from '@/lib/contactAttempts.mjs';
+import { formatDhakaDate, formatDhakaDateTime } from '@/lib/dhakaTime.mjs';
 import FlagActions from '@/app/components/FlagActions';
 import HappinessScorePicker from '@/app/components/HappinessScorePicker';
 
@@ -250,7 +251,7 @@ export default function OrderDetailPage() {
     if (STATUS_FIELDS.has(field)) return statusLabel(value);
     if (field === 'changed_at' || field === 'removed_from_sheet_at' || field === 'created_at') {
       const parsed = new Date(value);
-      return Number.isNaN(parsed.getTime()) ? value : parsed.toLocaleString();
+      return Number.isNaN(parsed.getTime()) ? value : formatDhakaDateTime(value);
     }
     return value;
   };
@@ -321,7 +322,7 @@ export default function OrderDetailPage() {
             <span style={{ ...statusBadgeStyle(order.delivery_status), borderRadius: '999px', padding: '0.25rem 0.6rem', fontSize: '0.85rem' }}>{statusLabel(order.delivery_status)}</span>
             {order.archived_at ? (
               <span style={{ background: '#f0f0f0', color: '#616161', borderRadius: '999px', padding: '0.25rem 0.6rem', fontSize: '0.85rem' }}>
-                Archived {new Date(order.archived_at).toLocaleDateString()}
+                Archived {formatDhakaDate(order.archived_at)}
               </span>
             ) : null}
           </div>
@@ -332,7 +333,7 @@ export default function OrderDetailPage() {
       </div>
 
       <div className="card">
-        <p style={{ margin: '0 0 0.4rem' }}>Created: {new Date(order.created_at).toLocaleString()}</p>
+        <p style={{ margin: '0 0 0.4rem' }}>Created: {formatDhakaDateTime(order.created_at)}</p>
         <p style={{ margin: '0 0 0.4rem' }}>Phone: <a href={telHref(order.phone)}>{order.phone}</a></p>
         <p style={{ margin: 0 }}>Address: {order.address}</p>
 
@@ -563,7 +564,7 @@ export default function OrderDetailPage() {
                     {entry.actor ? ` · ${entry.actor}` : ''}
                   </div>
                 </div>
-                <div style={{ color: '#666', whiteSpace: 'nowrap' }}>{new Date(entry.changed_at).toLocaleString()}</div>
+                <div style={{ color: '#666', whiteSpace: 'nowrap' }}>{formatDhakaDateTime(entry.changed_at)}</div>
               </div>
             ))}
           </div>

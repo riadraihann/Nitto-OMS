@@ -1,5 +1,6 @@
 import { supabaseAdmin } from '@/lib/supabase';
 import { TERMINAL_CONFIRMATION_STATUSES } from '@/lib/contactAttempts.mjs';
+import { dhakaDayString } from '@/lib/dhakaTime.mjs';
 
 export type OrderRef = {
   id: number;
@@ -30,10 +31,6 @@ const RESOLVED_DELIVERY = ['delivered', 'returned'];
 // naturally bounded to still-active orders), duplicate phone+day+items could technically match
 // across the whole history, but a "duplicate" from 3 months ago isn't something to act on today
 const DUPLICATE_LOOKBACK_DAYS = 30;
-
-function dhakaDay(iso: string): string {
-  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Dhaka', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(iso));
-}
 
 function daysBetween(fromIso: string, toIso: string): number {
   return Math.floor((new Date(toIso).getTime() - new Date(fromIso).getTime()) / 86400000);
@@ -191,7 +188,7 @@ async function findDuplicates(nowIso: string): Promise<DuplicateGroup[]> {
   const groups = new Map<string, Candidate[]>();
 
   for (const order of (data ?? []) as any[]) {
-    const day = dhakaDay(order.created_at);
+    const day = dhakaDayString(order.created_at);
     const key = `${order.phone}__${day}`;
     const candidate: Candidate = {
       id: order.id,
@@ -236,7 +233,7 @@ export async function computeAttentionNeeded(staleDays: number): Promise<Attenti
   }
 
   const nowIso = new Date().toISOString();
-  const todayStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Dhaka', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(nowIso));
+  const todayStr = dhakaDayString(nowIso);
 
   const [subtotalMismatches, staleStatus, urgencyPassed, duplicateGroups] = await Promise.all([
     findSubtotalMismatches(nowIso),

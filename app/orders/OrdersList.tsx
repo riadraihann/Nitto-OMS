@@ -6,6 +6,7 @@ import { useEffect, useState } from 'react';
 import { statusBadgeStyle, statusLabel, confirmationStatusOptions, deliveryOptions, urgencyTypeOptions, urgencyTypeOptionLabel, urgencyLabel, telHref, CALL_PENDING_STAGES, isHistoryDelivery } from '@/lib/theme';
 import { NEEDS_REVIEW_REASON_LABELS } from '@/lib/orderValidation.mjs';
 import { ATTEMPT_TYPES, ATTEMPT_MAX, ATTEMPT_TYPE_LABELS, isTerminalConfirmationStatus, formatAttemptsForDisplay } from '@/lib/contactAttempts.mjs';
+import { formatDhakaDateTime } from '@/lib/dhakaTime.mjs';
 import PaginationBar from '@/app/components/PaginationBar';
 import FlagActions from '@/app/components/FlagActions';
 
@@ -485,7 +486,7 @@ export default function OrdersList({ orders: initialOrders, view, bucket, totalC
                       <a href={telHref(order.phone)} style={{ fontWeight: 600 }}>{order.phone}</a>
                     </div>
                     <div style={{ color: '#666', marginTop: '0.15rem', fontSize: '0.9rem', maxWidth: '32rem', wordBreak: 'break-word' }}>{order.address}</div>
-                    <div style={{ color: '#666', marginTop: '0.3rem' }}>{new Date(order.created_at).toLocaleString()}</div>
+                    <div style={{ color: '#666', marginTop: '0.3rem' }}>{formatDhakaDateTime(order.created_at)}</div>
                   </div>
                   <div style={{ textAlign: 'right' }}>
                     <div style={{ fontWeight: 700 }}>Total: ৳{subtotal.toFixed(2)}</div>
@@ -611,7 +612,7 @@ export default function OrdersList({ orders: initialOrders, view, bucket, totalC
                     {archivingIds.has(order.id) ? 'Working...' : order.archived_at ? 'Restore' : 'Archive'}
                   </button>
                   {order.archived_at ? (
-                    <span style={{ color: '#666', fontSize: '0.8rem' }}>Archived {new Date(order.archived_at).toLocaleString()}</span>
+                    <span style={{ color: '#666', fontSize: '0.8rem' }}>Archived {formatDhakaDateTime(order.archived_at)}</span>
                   ) : null}
                 </div>
               </div>

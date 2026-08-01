@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { supabaseAdmin } from '@/lib/supabase';
 import { PAGE_SIZE_OPTIONS, parsePageParams, rangeFor, buildQueryHref } from '@/lib/pagination';
 import { happinessEmoji, HAPPINESS_LABELS } from '@/lib/theme';
+import { formatDhakaDateTime } from '@/lib/dhakaTime.mjs';
 import PaginationBar from '@/app/components/PaginationBar';
 
 export const dynamic = 'force-dynamic';
@@ -156,7 +157,7 @@ export default async function FeedbackReportPage({ searchParams }: ReportPagePro
                 <div>
                   <div style={{ fontSize: '0.9rem', color: '#666' }}>{row.order_number ?? `Order #${row.id}`}</div>
                   <Link href={`/orders/${row.id}`} style={{ fontSize: '1.05rem', fontWeight: 700, color: '#a83aa3' }}>{row.customer_name}</Link>
-                  <div style={{ color: '#666', marginTop: '0.15rem', fontSize: '0.85rem' }}>{new Date(row.created_at).toLocaleString()}</div>
+                  <div style={{ color: '#666', marginTop: '0.15rem', fontSize: '0.85rem' }}>{formatDhakaDateTime(row.created_at)}</div>
                 </div>
                 <div style={{ textAlign: 'right' }}>
                   <div style={{ fontWeight: 700, fontSize: '1.3rem' }} title={row.happiness_score !== null ? HAPPINESS_LABELS[row.happiness_score] : undefined}>

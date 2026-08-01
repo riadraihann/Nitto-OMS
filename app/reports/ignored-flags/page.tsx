@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { supabaseAdmin } from '@/lib/supabase';
 import { requireAdmin } from '@/lib/auth/requireAdmin';
 import { NEEDS_REVIEW_REASON_LABELS } from '@/lib/orderValidation.mjs';
+import { formatDhakaDateTime } from '@/lib/dhakaTime.mjs';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -73,7 +74,7 @@ export default async function IgnoredFlagsPage() {
                     {row.orders?.order_number ?? `Order #${row.order_id}`} · {row.orders?.customer_name}
                   </Link>
                   <span style={{ color: '#666', fontSize: '0.85rem' }}>
-                    {row.actor_name ?? row.actor_email} · {new Date(row.acted_at).toLocaleString()}
+                    {row.actor_name ?? row.actor_email} · {formatDhakaDateTime(row.acted_at)}
                   </span>
                 </div>
                 <div style={{ marginTop: '0.3rem', fontSize: '0.9rem' }}>

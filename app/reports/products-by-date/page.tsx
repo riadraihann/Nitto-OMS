@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { supabaseAdmin } from '@/lib/supabase';
 import { requireAdmin } from '@/lib/auth/requireAdmin';
+import { splitVariant } from '@/lib/productGrouping.mjs';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -23,16 +24,6 @@ type ReportPageProps = {
 
 function getParam(value: string | string[] | undefined) {
   return Array.isArray(value) ? value[0] ?? '' : value ?? '';
-}
-
-// order_items only stores a single product_name string (e.g. "Snuggly Palazzo - Black, XL"),
-// there's no separate color/size column. We treat the text before the first " - " as the base
-// product and everything after as the variant, so grand totals can roll up across variants.
-// Product names that don't follow that "Base - Variant" pattern are left ungrouped (base = full name).
-function splitVariant(productName: string): { base: string; variant: string } {
-  const idx = productName.indexOf(' - ');
-  if (idx === -1) return { base: productName, variant: '' };
-  return { base: productName.slice(0, idx).trim(), variant: productName.slice(idx + 3).trim() };
 }
 
 async function fetchOrdersInRange(dateFrom: string, dateTo: string) {
