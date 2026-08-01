@@ -1,8 +1,9 @@
 import Link from 'next/link';
 import type { CSSProperties } from 'react';
 import { supabaseAdmin } from '@/lib/supabase';
-import { computeAttentionNeeded } from '@/lib/attentionChecks';
+import { computeAttentionNeededWithFlags } from '@/lib/attentionNeededWithFlags';
 import { statusLabel, telHref } from '@/lib/theme';
+import AttentionFlagActions from './AttentionFlagActions';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -39,7 +40,7 @@ export default async function AttentionNeededPage({ searchParams }: ReportPagePr
   let checks;
   let errorMessage = '';
   try {
-    checks = await computeAttentionNeeded(staleDays);
+    checks = await computeAttentionNeededWithFlags(staleDays);
   } catch (error) {
     errorMessage = error instanceof Error ? error.message : 'Unknown error';
   }
@@ -86,6 +87,7 @@ export default async function AttentionNeededPage({ searchParams }: ReportPagePr
               <div key={o.id} style={{ ...rowStyle, display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.5rem' }}>
                 <OrderLink {...o} />
                 <span style={{ color: '#8a5300' }}>Stored: ৳{o.total_amount.toFixed(2)} · Items sum to: ৳{o.computed_subtotal.toFixed(2)}</span>
+                <AttentionFlagActions orderId={o.id} flagType="subtotal_mismatch" />
               </div>
             ))}
           </div>
@@ -112,6 +114,7 @@ export default async function AttentionNeededPage({ searchParams }: ReportPagePr
                 <span style={{ color: '#8a5300' }}>
                   {statusLabel(o.confirmation_status)} / {statusLabel(o.delivery_status)} · {o.days_since} days since last change
                 </span>
+                <AttentionFlagActions orderId={o.id} flagType="stale_status" />
               </div>
             ))}
           </div>
@@ -128,6 +131,7 @@ export default async function AttentionNeededPage({ searchParams }: ReportPagePr
                 <span style={{ color: '#c62828' }}>
                   {o.urgency_type.toUpperCase()} target {o.urgency_target_date}, {o.days_overdue}d overdue · {statusLabel(o.confirmation_status)} / {statusLabel(o.delivery_status)}
                 </span>
+                <AttentionFlagActions orderId={o.id} flagType="urgency_passed" />
               </div>
             ))}
           </div>
@@ -145,8 +149,9 @@ export default async function AttentionNeededPage({ searchParams }: ReportPagePr
                   <a href={telHref(group.phone)}>{group.phone}</a> · {group.day}
                 </div>
                 {group.orders.map((o) => (
-                  <div key={o.id} style={{ ...rowStyle, borderBottom: 'none', padding: '0.25rem 0' }}>
-                    <OrderLink {...o} /> <span style={{ color: '#666' }}>— {o.items.join(', ') || 'no items'}</span>
+                  <div key={o.id} style={{ ...rowStyle, borderBottom: 'none', padding: '0.25rem 0', display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.5rem' }}>
+                    <span><OrderLink {...o} /> <span style={{ color: '#666' }}>— {o.items.join(', ') || 'no items'}</span></span>
+                    <AttentionFlagActions orderId={o.id} flagType="duplicate_group" />
                   </div>
                 ))}
               </div>

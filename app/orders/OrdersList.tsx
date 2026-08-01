@@ -6,6 +6,7 @@ import { statusBadgeStyle, statusLabel, confirmationStatusOptions, deliveryOptio
 import { NEEDS_REVIEW_REASON_LABELS } from '@/lib/orderValidation.mjs';
 import { ATTEMPT_TYPES, ATTEMPT_MAX, ATTEMPT_TYPE_LABELS, isTerminalConfirmationStatus, formatAttemptsForDisplay } from '@/lib/contactAttempts.mjs';
 import PaginationBar from '@/app/components/PaginationBar';
+import FlagActions from '@/app/components/FlagActions';
 
 type OrderItem = {
   sku: string;
@@ -35,6 +36,7 @@ type OrderRow = {
   archived_at: string | null;
   needs_review: boolean;
   needs_review_reasons: string[] | null;
+  visible_needs_review_reasons: string[];
   order_items: OrderItem[];
   contact_attempts: ContactAttempt[];
 };
@@ -106,6 +108,14 @@ export default function OrdersList({ orders: initialOrders, view, bucket, totalC
     } finally {
       setSyncing(false);
     }
+  };
+
+  const handleFlagActioned = (orderId: number, flagType: string) => {
+    setOrders((prev) =>
+      prev.map((o) =>
+        o.id === orderId ? { ...o, visible_needs_review_reasons: o.visible_needs_review_reasons.filter((r) => r !== flagType) } : o
+      )
+    );
   };
 
   const updateField = async (orderId: number, field: 'confirmation_status' | 'delivery_status', value: string) => {
@@ -449,9 +459,20 @@ export default function OrdersList({ orders: initialOrders, view, bucket, totalC
                   </div>
                 </div>
 
-                {order.needs_review ? (
+                {order.visible_needs_review_reasons.length > 0 ? (
                   <div style={{ marginTop: '0.5rem', background: '#fff3e0', color: '#8a5300', borderRadius: '8px', padding: '0.4rem 0.6rem', fontSize: '0.85rem' }}>
-                    Needs review: {(order.needs_review_reasons ?? []).map((reason) => NEEDS_REVIEW_REASON_LABELS[reason] ?? reason).join(', ')}
+                    <div>Needs review:</div>
+                    {order.visible_needs_review_reasons.map((reason) => (
+                      <div key={reason} style={{ marginTop: '0.15rem' }}>
+                        {NEEDS_REVIEW_REASON_LABELS[reason] ?? reason}
+                        <FlagActions
+                          orderId={order.id}
+                          flagType={reason}
+                          sourceSystem="needs_review"
+                          onActioned={() => handleFlagActioned(order.id, reason)}
+                        />
+                      </div>
+                    ))}
                   </div>
                 ) : null}
 

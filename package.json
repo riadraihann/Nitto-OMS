@@ -8,6 +8,7 @@
     "start": "next start"
   },
   "dependencies": {
+    "@supabase/ssr": "^0.12.4",
     "@supabase/supabase-js": "^2.46.1",
     "exceljs": "^4.4.0",
     "google-auth-library": "^11.0.0",

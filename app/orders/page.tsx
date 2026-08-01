@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { supabaseAdmin } from '@/lib/supabase';
 import { CALL_PENDING_STAGES, HISTORY_DELIVERY_STATUSES, confirmationStatusOptions, statusLabel } from '@/lib/theme';
 import { PAGE_SIZE_OPTIONS, parsePageParams, rangeFor, buildQueryHref } from '@/lib/pagination';
+import { getVisibleNeedsReviewReasons } from '@/lib/needsReviewFlags';
 import OrdersList from './OrdersList';
 
 export const dynamic = 'force-dynamic';
@@ -35,6 +36,7 @@ type OrderRow = {
   archived_at: string | null;
   needs_review: boolean;
   needs_review_reasons: string[] | null;
+  visible_needs_review_reasons: string[];
   order_items: OrderItem[];
   contact_attempts: ContactAttempt[];
 };
@@ -148,7 +150,20 @@ export default async function OrdersPage({ searchParams }: OrdersPageProps) {
     );
   }
 
-  const orders = (data ?? []) as OrderRow[];
+  const rawOrders = (data ?? []) as Omit<OrderRow, 'visible_needs_review_reasons'>[];
+  const visibleReasonsByOrder = await getVisibleNeedsReviewReasons(supabaseAdmin, rawOrders);
+  let orders: OrderRow[] = rawOrders.map((order) => ({
+    ...order,
+    visible_needs_review_reasons: visibleReasonsByOrder.get(order.id) ?? [],
+  }));
+
+  // an order stays in this filtered view only while it has at least one visible (unactioned or
+  // ignored-but-still-active-elsewhere) reason -- one that's fully resolved/ignored across all
+  // its reasons no longer "needs review" for this list's purposes, even though the raw
+  // needs_review column (used for the DB-side filter above) is still true.
+  if (view === 'needs-review') {
+    orders = orders.filter((order) => order.visible_needs_review_reasons.length > 0);
+  }
 
   const currentParams: Record<string, string> = {
     ...(view ? { view } : {}),

@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { supabaseAdmin } from '@/lib/supabase';
 import { HISTORY_DELIVERY_STATUSES, confirmationStatusOptions, statusLabel } from '@/lib/theme';
 import { PAGE_SIZE_OPTIONS, parsePageParams, rangeFor, buildQueryHref } from '@/lib/pagination';
+import { getVisibleNeedsReviewReasons } from '@/lib/needsReviewFlags';
 import OrdersList from '../orders/OrdersList';
 
 export const dynamic = 'force-dynamic';
@@ -35,6 +36,7 @@ type OrderRow = {
   archived_at: string | null;
   needs_review: boolean;
   needs_review_reasons: string[] | null;
+  visible_needs_review_reasons: string[];
   order_items: OrderItem[];
   contact_attempts: ContactAttempt[];
 };
@@ -113,7 +115,12 @@ export default async function HistoryPage({ searchParams }: HistoryPageProps) {
     );
   }
 
-  const orders = (data ?? []) as OrderRow[];
+  const rawOrders = (data ?? []) as Omit<OrderRow, 'visible_needs_review_reasons'>[];
+  const visibleReasonsByOrder = await getVisibleNeedsReviewReasons(supabaseAdmin, rawOrders);
+  const orders: OrderRow[] = rawOrders.map((order) => ({
+    ...order,
+    visible_needs_review_reasons: visibleReasonsByOrder.get(order.id) ?? [],
+  }));
 
   const currentParams: Record<string, string> = {
     ...(urgency ? { urgency_type: urgency } : {}),

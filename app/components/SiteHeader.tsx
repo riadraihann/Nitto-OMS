@@ -1,19 +1,62 @@
 "use client";
 
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { useEffect, useState } from 'react';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 
-const navItems = [
+type NavItem = { href: string; label: string; adminOnly?: boolean; countKey?: 'needsReview' | 'attentionNeeded' };
+
+// adminOnly entries are also enforced by middleware.ts's ADMIN_ONLY_ROUTE_PREFIXES -- declared
+// once here, both the nav filter below and that route guard should stay in sync when a future
+// admin-only page is added.
+const navItems: NavItem[] = [
   { href: '/orders', label: 'Orders' },
   { href: '/history', label: 'History' },
   { href: '/orders/new', label: 'Add order' },
-  { href: '/reports/products-by-date', label: 'Products report' },
-  { href: '/reports/attention-needed', label: 'Attention Needed' },
+  { href: '/orders?view=needs-review', label: 'Needs Review', countKey: 'needsReview' },
+  { href: '/reports/products-by-date', label: 'Products report', adminOnly: true },
+  { href: '/reports/attention-needed', label: 'Attention Needed', countKey: 'attentionNeeded' },
   { href: '/reports/feedback', label: 'Feedback report' },
+  { href: '/reports/ignored-flags', label: 'Ignored Flags' },
 ];
 
-export default function SiteHeader() {
+type SiteHeaderProps = {
+  role: 'admin' | 'moderator' | null;
+};
+
+export default function SiteHeader({ role }: SiteHeaderProps) {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const [counts, setCounts] = useState<{ needsReview: number; attentionNeeded: number } | null>(null);
+  const [signingOut, setSigningOut] = useState(false);
+
+  useEffect(() => {
+    if (!role) return;
+    let cancelled = false;
+    fetch('/api/flags/counts')
+      .then((res) => res.json())
+      .then((result) => {
+        if (!cancelled && result?.ok) {
+          setCounts({ needsReview: result.needsReview, attentionNeeded: result.attentionNeeded });
+        }
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+    // refetch whenever the route changes, so counts stay reasonably fresh as the user navigates
+    // and actions flags -- this is a client component with no server-pushed data source.
+  }, [role, pathname, searchParams]);
+
+  const handleSignOut = async () => {
+    setSigningOut(true);
+    await fetch('/api/auth/signout', { method: 'POST' });
+    router.push('/login');
+    router.refresh();
+  };
+
+  const visibleItems = navItems.filter((item) => !item.adminOnly || role === 'admin');
 
   return (
     <header style={{ background: '#ffffff' }}>
@@ -35,17 +78,27 @@ export default function SiteHeader() {
         </Link>
 
         <nav style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-          {navItems.map((item) => {
+          {visibleItems.map((item) => {
+            const [itemPath, itemQuery] = item.href.split('?');
             const active =
-              item.href === '/orders'
-                ? pathname === '/orders' || (pathname?.startsWith('/orders/') && !pathname?.startsWith('/orders/new'))
-                : pathname?.startsWith(item.href);
+              itemPath === '/orders' && !itemQuery
+                ? (pathname === '/orders' && !searchParams.get('view')) || (pathname?.startsWith('/orders/') && !pathname?.startsWith('/orders/new'))
+                : itemQuery
+                  ? pathname === itemPath && searchParams.toString() === itemQuery
+                  : pathname?.startsWith(item.href);
+            const count = item.countKey ? counts?.[item.countKey] : undefined;
             return (
               <Link key={item.href} href={item.href} className={`nav-pill${active ? ' active' : ''}`}>
                 {item.label}
+                {typeof count === 'number' ? ` (${count})` : ''}
               </Link>
             );
           })}
+          {role ? (
+            <button type="button" onClick={handleSignOut} disabled={signingOut} className="nav-pill" style={{ cursor: 'pointer' }}>
+              {signingOut ? 'Signing out…' : 'Sign out'}
+            </button>
+          ) : null}
         </nav>
       </div>
       {/* the one deliberately distinctive touch -- everything else stays quiet around it */}

@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { supabaseAdmin } from '@/lib/supabase';
+import { requireAdmin } from '@/lib/auth/requireAdmin';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -61,6 +62,8 @@ async function fetchOrdersInRange(dateFrom: string, dateTo: string) {
 }
 
 export default async function ProductsByDatePage({ searchParams }: ReportPageProps) {
+  await requireAdmin();
+
   if (!supabaseAdmin) {
     return (
       <main style={{ maxWidth: 1100, margin: '2rem auto', padding: '0 1rem' }}>

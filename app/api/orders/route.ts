@@ -6,6 +6,7 @@ import { writeColumnC } from '@/lib/sheetWriteBack';
 import { diffOrderFields, logOrderHistory } from '@/lib/orderHistory.mjs';
 import { computeNeedsReview } from '@/lib/orderValidation.mjs';
 import { isTerminalConfirmationStatus } from '@/lib/contactAttempts.mjs';
+import { getVisibleNeedsReviewReasons } from '@/lib/needsReviewFlags';
 
 // Fields whose values feed computeNeedsReview -- a PATCH only needs to recompute needs_review
 // when one of these actually changed (item count can't change via this endpoint at all, so it's
@@ -34,6 +35,11 @@ export async function GET(request: Request) {
 
     if (error) {
       return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
+    }
+
+    if (id && data) {
+      const visibleReasonsByOrder = await getVisibleNeedsReviewReasons(supabaseAdmin, [data]);
+      (data as any).visible_needs_review_reasons = visibleReasonsByOrder.get((data as any).id) ?? [];
     }
 
     return NextResponse.json({ ok: true, data });

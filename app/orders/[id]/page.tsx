@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { statusBadgeStyle, statusLabel, confirmationStatusOptions, deliveryOptions, urgencyTypeOptions, urgencyTypeOptionLabel, urgencyLabel, telHref } from '@/lib/theme';
 import { NEEDS_REVIEW_REASON_LABELS } from '@/lib/orderValidation.mjs';
 import { ATTEMPT_TYPES, ATTEMPT_MAX, ATTEMPT_TYPE_LABELS, isTerminalConfirmationStatus, formatAttemptsForDisplay } from '@/lib/contactAttempts.mjs';
+import FlagActions from '@/app/components/FlagActions';
 
 type OrderItem = {
   id?: number;
@@ -50,6 +51,7 @@ type Order = {
   archived_at: string | null;
   needs_review: boolean;
   needs_review_reasons: string[] | null;
+  visible_needs_review_reasons?: string[];
   order_items?: OrderItem[];
   contact_attempts?: ContactAttempt[];
 };
@@ -80,15 +82,15 @@ export default function OrderDetailPage() {
     }
   };
 
-  useEffect(() => {
-    const loadOrder = async () => {
-      const response = await fetch(`/api/orders?id=${id}`);
-      const result = await response.json();
-      if (result?.data) {
-        setOrder(result.data);
-      }
-    };
+  const loadOrder = async () => {
+    const response = await fetch(`/api/orders?id=${id}`);
+    const result = await response.json();
+    if (result?.data) {
+      setOrder(result.data);
+    }
+  };
 
+  useEffect(() => {
     if (id) {
       loadOrder();
       loadHistory();
@@ -270,9 +272,15 @@ export default function OrderDetailPage() {
       <p>Phone: <a href={telHref(order.phone)}>{order.phone}</a></p>
       <p>Address: {order.address}</p>
 
-      {order.needs_review ? (
+      {(order.visible_needs_review_reasons ?? []).length > 0 ? (
         <div style={{ background: '#fff3e0', color: '#8a5300', borderRadius: '8px', padding: '0.6rem 0.85rem', marginBottom: '1rem' }}>
-          <strong>Needs review:</strong> {(order.needs_review_reasons ?? []).map((reason) => NEEDS_REVIEW_REASON_LABELS[reason] ?? reason).join(', ')}
+          <strong>Needs review:</strong>
+          {(order.visible_needs_review_reasons ?? []).map((reason) => (
+            <div key={reason} style={{ marginTop: '0.35rem' }}>
+              {NEEDS_REVIEW_REASON_LABELS[reason] ?? reason}
+              <FlagActions orderId={order.id} flagType={reason} sourceSystem="needs_review" onActioned={loadOrder} />
+            </div>
+          ))}
         </div>
       ) : null}
 
