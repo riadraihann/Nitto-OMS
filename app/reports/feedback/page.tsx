@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { supabaseAdmin } from '@/lib/supabase';
 import { PAGE_SIZE_OPTIONS, parsePageParams, rangeFor, buildQueryHref } from '@/lib/pagination';
+import { happinessEmoji, HAPPINESS_LABELS } from '@/lib/theme';
 import PaginationBar from '@/app/components/PaginationBar';
 
 export const dynamic = 'force-dynamic';
@@ -158,7 +159,9 @@ export default async function FeedbackReportPage({ searchParams }: ReportPagePro
                   <div style={{ color: '#666', marginTop: '0.15rem', fontSize: '0.85rem' }}>{new Date(row.created_at).toLocaleString()}</div>
                 </div>
                 <div style={{ textAlign: 'right' }}>
-                  <div style={{ fontWeight: 700 }}>{row.happiness_score !== null ? `Happiness: ${row.happiness_score}` : 'No score'}</div>
+                  <div style={{ fontWeight: 700, fontSize: '1.3rem' }} title={row.happiness_score !== null ? HAPPINESS_LABELS[row.happiness_score] : undefined}>
+                    {row.happiness_score !== null ? happinessEmoji(row.happiness_score) : <span style={{ fontSize: '0.9rem', color: '#666', fontWeight: 400 }}>No score</span>}
+                  </div>
                 </div>
               </div>
               {row.product_suggestions ? (

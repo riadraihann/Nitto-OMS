@@ -1,10 +1,11 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
+import { getActor } from '@/lib/supabase/server';
 import { normalizeUrgencyFields } from '@/lib/urgencyTarget.mjs';
 import { buildColumnC } from '@/lib/sheetRowParser.mjs';
 import { writeColumnC } from '@/lib/sheetWriteBack';
 import { diffOrderFields, logOrderHistory } from '@/lib/orderHistory.mjs';
-import { computeNeedsReview } from '@/lib/orderValidation.mjs';
+import { computeNeedsReview, validateFeedbackFields } from '@/lib/orderValidation.mjs';
 import { isTerminalConfirmationStatus } from '@/lib/contactAttempts.mjs';
 import { getVisibleNeedsReviewReasons } from '@/lib/needsReviewFlags';
 
@@ -64,6 +65,11 @@ export async function POST(request: Request) {
     }
     const orderData = normalized.payload;
 
+    const feedbackValidation = validateFeedbackFields(orderData);
+    if (!feedbackValidation.ok) {
+      return NextResponse.json({ ok: false, error: feedbackValidation.error }, { status: 400 });
+    }
+
     const normalizedItems = (items as Array<Record<string, unknown>>)
       .filter((item) => Boolean(item?.sku || item?.product_name))
       .map((item) => ({
@@ -96,11 +102,13 @@ export async function POST(request: Request) {
       }
     }
 
+    const actor = await getActor();
     await logOrderHistory(
       supabaseAdmin,
       order.id,
       [{ field: 'order_created', old_value: null, new_value: `Created manually (${order.order_source})` }],
       'moderator',
+      actor?.name ?? null,
     );
 
     return NextResponse.json({ ok: true, data: { order, items: normalizedItems } });
@@ -129,6 +137,11 @@ export async function PATCH(request: Request) {
     const normalized = normalizeUrgencyFields(rawUpdatePayload);
     if (!normalized.ok) {
       return NextResponse.json({ ok: false, error: normalized.error }, { status: 400 });
+    }
+
+    const feedbackValidation = validateFeedbackFields(normalized.payload);
+    if (!feedbackValidation.ok) {
+      return NextResponse.json({ ok: false, error: feedbackValidation.error }, { status: 400 });
     }
 
     // phone/total_amount are sheet/CSV-owned and not edited through the UI today, but PATCH is a
@@ -160,8 +173,9 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
     }
 
+    const actor = await getActor();
     const changes = diffOrderFields(before, data, updatedFields);
-    await logOrderHistory(supabaseAdmin, id, changes, 'moderator');
+    await logOrderHistory(supabaseAdmin, id, changes, 'moderator', actor?.name ?? null);
 
     // moving to a terminal confirmation status wipes all contact-attempt counters -- the
     // display becomes just that status, not the attempt history alongside it
@@ -170,7 +184,7 @@ export async function PATCH(request: Request) {
       if (existingAttempts && existingAttempts.length > 0) {
         await supabaseAdmin.from('contact_attempts').delete().eq('order_id', id);
         const summary = existingAttempts.map((a) => `${a.type}=${a.count}`).join(', ');
-        await logOrderHistory(supabaseAdmin, id, [{ field: 'contact_attempts', old_value: summary, new_value: null }], 'moderator');
+        await logOrderHistory(supabaseAdmin, id, [{ field: 'contact_attempts', old_value: summary, new_value: null }], 'moderator', actor?.name ?? null);
       }
     }
 

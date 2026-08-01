@@ -4,6 +4,7 @@ import { FormEvent, useState, type ChangeEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import { defaultConfirmationStatus } from '@/lib/orderDefaults.mjs';
 import { urgencyTypeOptions, urgencyTypeOptionLabel, confirmationStatusOptions, statusLabel } from '@/lib/theme';
+import HappinessScorePicker from '@/app/components/HappinessScorePicker';
 
 type OrderItemInput = {
   sku: string;
@@ -23,7 +24,7 @@ type OrderFormState = {
   delivery_status: string;
   special_instructions: string;
   cancel_return_reason: string;
-  happiness_score: string;
+  happiness_score: number | null;
   product_suggestions: string;
 };
 
@@ -38,7 +39,7 @@ const initialState: OrderFormState = {
   delivery_status: 'packaging',
   special_instructions: '',
   cancel_return_reason: '',
-  happiness_score: '',
+  happiness_score: null,
   product_suggestions: '',
 };
 
@@ -91,7 +92,6 @@ export default function NewOrderPage() {
     const payload = {
       ...restForm,
       ...((form.urgency_type === 'vu' || form.urgency_type === 'd') ? { urgency_target_day } : {}),
-      happiness_score: form.happiness_score === '' ? null : Number(form.happiness_score),
       items: items
         .filter((item) => item.sku.trim() || item.product_name.trim())
         .map((item) => ({
@@ -256,7 +256,10 @@ export default function NewOrderPage() {
 
         <label>
           Happiness score
-          <input type="number" step="0.1" name="happiness_score" value={form.happiness_score} onChange={handleChange} />
+          <HappinessScorePicker
+            value={form.happiness_score}
+            onChange={(value) => setForm((prev) => ({ ...prev, happiness_score: value }))}
+          />
         </label>
 
         <label>

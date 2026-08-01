@@ -113,3 +113,29 @@ export function telHref(phone: string): string {
   if (digits.startsWith('0')) return `tel:+880${digits.slice(1)}`;
   return `tel:+880${digits}`;
 }
+
+// happiness_score is a strict 1-5 whole number (see supabase/add_feedback_and_happiness_constraint.sql)
+// backing the emoji picker on the order detail page -- shown as the same emoji everywhere else
+// the score appears (Feedback report, etc.) instead of a bare number.
+export const HAPPINESS_SCORE_OPTIONS = [1, 2, 3, 4, 5] as const;
+
+export const HAPPINESS_EMOJIS: Record<number, string> = {
+  1: '😠',
+  2: '😢',
+  3: '😐',
+  4: '😊',
+  5: '🥰',
+};
+
+export const HAPPINESS_LABELS: Record<number, string> = {
+  1: 'Angry',
+  2: 'Crying',
+  3: 'Neutral',
+  4: 'Smiling',
+  5: 'Loved it',
+};
+
+export function happinessEmoji(score: number | null | undefined): string {
+  if (score === null || score === undefined) return '';
+  return HAPPINESS_EMOJIS[score] ?? String(score);
+}

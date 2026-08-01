@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
+import { getActor } from '@/lib/supabase/server';
 
 // Single-row archive/restore already goes through the generic PATCH /api/orders endpoint
 // (which logs to order_history automatically via its diff). This endpoint exists only for the
@@ -33,6 +34,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
     }
 
+    const actor = await getActor();
     const updatedIds = (data ?? []).map((row) => row.id);
     const historyRows = updatedIds.map((id) => ({
       order_id: id,
@@ -40,7 +42,7 @@ export async function POST(request: Request) {
       old_value: archive ? null : nowIso,
       new_value: archivedAtValue,
       source: 'moderator',
-      actor: null,
+      actor: actor?.name ?? null,
     }));
 
     if (historyRows.length > 0) {

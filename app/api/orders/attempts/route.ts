@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
+import { getActor } from '@/lib/supabase/server';
 import { ATTEMPT_TYPES, ATTEMPT_MAX, isTerminalConfirmationStatus } from '@/lib/contactAttempts.mjs';
 import { buildColumnC } from '@/lib/sheetRowParser.mjs';
 import { writeColumnC } from '@/lib/sheetWriteBack';
@@ -71,11 +72,13 @@ export async function POST(request: Request) {
       }
     }
 
+    const actor = await getActor();
     await logOrderHistory(
       supabaseAdmin,
       orderId,
       [{ field: type, old_value: previousCount > 0 ? String(previousCount) : null, new_value: String(newCount) }],
       'moderator',
+      actor?.name ?? null,
     );
 
     const { data: attemptRows } = await supabaseAdmin

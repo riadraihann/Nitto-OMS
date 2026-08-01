@@ -703,3 +703,41 @@ label {
     background: #eee;
   }
 }
+
+/* ---------------------------------------------------------------------------------------
+   Happiness score emoji picker (see app/components/HappinessScorePicker.tsx). The selected
+   emoji gets a border + scale-up + tinted background -- deliberately more than just a subtle
+   highlight, since this replaces a plain numeric field and needs to read clearly at a glance.
+   --------------------------------------------------------------------------------------- */
+.happiness-picker {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.25rem;
+}
+
+.happiness-picker-option {
+  background: #fff;
+  border: 2px solid var(--card-border);
+  border-radius: 10px;
+  padding: 0.4rem 0.6rem;
+  font-size: 1.5rem;
+  line-height: 1;
+  cursor: pointer;
+  transition: transform 100ms ease, border-color 100ms ease, background-color 100ms ease;
+}
+
+.happiness-picker-option:hover:not(:disabled) {
+  border-color: var(--navy);
+}
+
+.happiness-picker-option.selected {
+  border-color: var(--navy);
+  background: var(--navy-tint);
+  transform: scale(1.15);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .happiness-picker-option.selected {
+    transform: none;
+  }
+}

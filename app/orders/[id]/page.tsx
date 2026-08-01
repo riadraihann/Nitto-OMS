@@ -3,9 +3,10 @@
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { statusBadgeStyle, statusLabel, confirmationStatusOptions, deliveryOptions, urgencyTypeOptions, urgencyTypeOptionLabel, urgencyLabel, telHref } from '@/lib/theme';
-import { NEEDS_REVIEW_REASON_LABELS } from '@/lib/orderValidation.mjs';
+import { NEEDS_REVIEW_REASON_LABELS, countWords, FEEDBACK_MAX_WORDS } from '@/lib/orderValidation.mjs';
 import { ATTEMPT_TYPES, ATTEMPT_MAX, ATTEMPT_TYPE_LABELS, isTerminalConfirmationStatus, formatAttemptsForDisplay } from '@/lib/contactAttempts.mjs';
 import FlagActions from '@/app/components/FlagActions';
+import HappinessScorePicker from '@/app/components/HappinessScorePicker';
 
 type OrderItem = {
   id?: number;
@@ -47,6 +48,7 @@ type Order = {
   cancel_return_reason: string | null;
   happiness_score: number | null;
   product_suggestions: string | null;
+  feedback: string | null;
   total_amount: number | null;
   archived_at: string | null;
   needs_review: boolean;
@@ -68,6 +70,17 @@ export default function OrderDetailPage() {
   // set only while a vu/d type is picked but no day has been committed yet -- keeps the
   // select showing the just-picked type even though nothing's saved
   const [pendingUrgencyType, setPendingUrgencyType] = useState<string | null>(null);
+
+  // Free-text fields use an explicit Save button instead of autosaving on every keystroke (that
+  // was writing one order_history row per keystroke) -- these hold the in-progress, not-yet-saved
+  // draft. Seeded once when the order first loads (see the effect below), then independently
+  // user-controlled; a successful save updates `order` to match what's already showing here.
+  const [specialInstructionsDraft, setSpecialInstructionsDraft] = useState('');
+  const [cancelReturnReasonDraft, setCancelReturnReasonDraft] = useState('');
+  const [happinessScoreDraft, setHappinessScoreDraft] = useState<number | null>(null);
+  const [productSuggestionsDraft, setProductSuggestionsDraft] = useState('');
+  const [feedbackDraft, setFeedbackDraft] = useState('');
+  const [draftsReady, setDraftsReady] = useState(false);
 
   const loadHistory = async () => {
     setHistoryLoading(true);
@@ -98,6 +111,21 @@ export default function OrderDetailPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
+  // Seed the draft fields once, the first time the order loads -- keyed on order.id (which never
+  // changes on this page) rather than `order` itself, so a later save's setOrder(...) doesn't
+  // stomp on whatever the user is still typing in an unrelated field.
+  useEffect(() => {
+    if (order && !draftsReady) {
+      setSpecialInstructionsDraft(order.special_instructions ?? '');
+      setCancelReturnReasonDraft(order.cancel_return_reason ?? '');
+      setHappinessScoreDraft(order.happiness_score ?? null);
+      setProductSuggestionsDraft(order.product_suggestions ?? '');
+      setFeedbackDraft(order.feedback ?? '');
+      setDraftsReady(true);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [order, draftsReady]);
+
   const updateField = async (field: keyof Order, value: string | number | null) => {
     if (!order) return;
 
@@ -123,6 +151,32 @@ export default function OrderDetailPage() {
       return;
     }
 
+    setMessage(result.sheetSyncWarning || 'Saved');
+    loadHistory();
+  };
+
+  // Explicit-Save counterpart to updateField -- takes one or more fields at once (the Feedback
+  // box saves happiness_score/product_suggestions/feedback together as one PATCH) and only ever
+  // runs when a Save button is clicked, never on a field's own onChange.
+  const saveFields = async (fields: Partial<Pick<Order, 'special_instructions' | 'cancel_return_reason' | 'happiness_score' | 'product_suggestions' | 'feedback'>>) => {
+    if (!order) return;
+    setSaving(true);
+    setMessage('');
+
+    const response = await fetch(`/api/orders?id=${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, ...fields }),
+    });
+    const result = await response.json();
+    setSaving(false);
+
+    if (!response.ok) {
+      setMessage(result.error || 'Unable to save');
+      return;
+    }
+
+    setOrder((prev) => (prev ? { ...prev, ...fields } : prev));
     setMessage(result.sheetSyncWarning || 'Saved');
     loadHistory();
   };
@@ -247,6 +301,12 @@ export default function OrderDetailPage() {
 
   const computedSubtotal = (order.order_items ?? []).reduce((sum, item) => sum + item.quantity * item.unit_price, 0);
   const subtotal = order.total_amount ?? computedSubtotal;
+
+  const feedbackWordCount = countWords(feedbackDraft);
+  const feedbackDirty =
+    happinessScoreDraft !== (order.happiness_score ?? null) ||
+    productSuggestionsDraft !== (order.product_suggestions ?? '') ||
+    feedbackDraft !== (order.feedback ?? '');
 
   return (
     <div style={{ maxWidth: 960, margin: '0 auto' }}>
@@ -393,39 +453,82 @@ export default function OrderDetailPage() {
         <div>
           <label>Special instructions</label>
           <textarea
-            value={order.special_instructions ?? ''}
-            onChange={(e) => updateField('special_instructions', e.target.value)}
+            value={specialInstructionsDraft}
+            onChange={(e) => setSpecialInstructionsDraft(e.target.value)}
             style={{ display: 'block', width: '100%', marginTop: '0.25rem' }}
           />
+          <button
+            type="button"
+            style={{ marginTop: '0.4rem' }}
+            disabled={saving || specialInstructionsDraft === (order.special_instructions ?? '')}
+            onClick={() => saveFields({ special_instructions: specialInstructionsDraft || null })}
+          >
+            Save
+          </button>
         </div>
 
         <div>
           <label>Cancel/return reason</label>
           <textarea
-            value={order.cancel_return_reason ?? ''}
-            onChange={(e) => updateField('cancel_return_reason', e.target.value)}
+            value={cancelReturnReasonDraft}
+            onChange={(e) => setCancelReturnReasonDraft(e.target.value)}
             style={{ display: 'block', width: '100%', marginTop: '0.25rem' }}
           />
+          <button
+            type="button"
+            style={{ marginTop: '0.4rem' }}
+            disabled={saving || cancelReturnReasonDraft === (order.cancel_return_reason ?? '')}
+            onClick={() => saveFields({ cancel_return_reason: cancelReturnReasonDraft || null })}
+          >
+            Save
+          </button>
         </div>
+      </div>
 
-        <div>
-          <label>Happiness score</label>
-          <input
-            type="number"
-            step="0.1"
-            value={order.happiness_score ?? ''}
-            onChange={(e) => updateField('happiness_score', e.target.value === '' ? null : Number(e.target.value))}
-            style={{ display: 'block', marginTop: '0.25rem' }}
-          />
-        </div>
+      <div className="card">
+        <h2 style={{ marginTop: 0 }}>Feedback</h2>
+        <div style={{ display: 'grid', gap: '0.75rem' }}>
+          <div>
+            <label>Happiness score</label>
+            <HappinessScorePicker value={happinessScoreDraft} onChange={setHappinessScoreDraft} />
+          </div>
 
-        <div>
-          <label>Product suggestions</label>
-          <textarea
-            value={order.product_suggestions ?? ''}
-            onChange={(e) => updateField('product_suggestions', e.target.value)}
-            style={{ display: 'block', width: '100%', marginTop: '0.25rem' }}
-          />
+          <div>
+            <label>Product suggestions</label>
+            <textarea
+              value={productSuggestionsDraft}
+              onChange={(e) => setProductSuggestionsDraft(e.target.value)}
+              style={{ display: 'block', width: '100%', marginTop: '0.25rem' }}
+            />
+          </div>
+
+          <div>
+            <label>Feedback</label>
+            <textarea
+              value={feedbackDraft}
+              onChange={(e) => setFeedbackDraft(e.target.value)}
+              style={{ display: 'block', width: '100%', marginTop: '0.25rem' }}
+            />
+            <div style={{ marginTop: '0.25rem', fontSize: '0.8rem', color: feedbackWordCount > FEEDBACK_MAX_WORDS ? '#c62828' : 'var(--text-muted)' }}>
+              {feedbackWordCount}/{FEEDBACK_MAX_WORDS} words{feedbackWordCount > FEEDBACK_MAX_WORDS ? ' — over the limit, trim it before saving' : ''}
+            </div>
+          </div>
+
+          <div>
+            <button
+              type="button"
+              disabled={saving || feedbackWordCount > FEEDBACK_MAX_WORDS || !feedbackDirty}
+              onClick={() =>
+                saveFields({
+                  happiness_score: happinessScoreDraft,
+                  product_suggestions: productSuggestionsDraft || null,
+                  feedback: feedbackDraft || null,
+                })
+              }
+            >
+              Save feedback
+            </button>
+          </div>
         </div>
       </div>
 
