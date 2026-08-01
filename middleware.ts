@@ -1,9 +1,11 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
 
-const env = process.env as unknown as Record<string, string | undefined>;
-const supabaseUrl = env.NEXT_PUBLIC_SUPABASE_URL?.trim() ?? '';
-const supabaseAnonKey = env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim() ?? '';
+// direct static process.env.X reads -- see lib/supabase/browser.ts for why the indirection
+// pattern used in lib/supabase.ts isn't safe here (Edge Middleware has the same build-time
+// inlining requirement as browser bundles for NEXT_PUBLIC_ vars).
+const supabaseUrl = (process.env as unknown as Record<string, string | undefined>).NEXT_PUBLIC_SUPABASE_URL?.trim() ?? '';
+const supabaseAnonKey = (process.env as unknown as Record<string, string | undefined>).NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim() ?? '';
 
 // extend this as future admin-only pages are added -- SiteHeader's nav filter and this array
 // both key off the same route prefixes, declared once (see app/components/SiteHeader.tsx).
