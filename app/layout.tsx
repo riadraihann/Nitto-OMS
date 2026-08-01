@@ -2,7 +2,7 @@ import './globals.css';
 import type { Metadata } from 'next';
 import { Suspense } from 'react';
 import { Inter, Poppins } from 'next/font/google';
-import SiteHeader from './components/SiteHeader';
+import Sidebar from './components/Sidebar';
 import { getActor } from '@/lib/supabase/server';
 
 // self-hosted at build time by Next.js (no runtime request to Google, no extra JS bundle) --
@@ -22,10 +22,12 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   return (
     <html lang="en" className={`${inter.variable} ${poppins.variable}`}>
       <body>
-        <Suspense fallback={null}>
-          <SiteHeader role={actor?.role ?? null} />
-        </Suspense>
-        {children}
+        <div className="app-shell">
+          <Suspense fallback={null}>
+            <Sidebar role={actor?.role ?? null} />
+          </Suspense>
+          <main className="app-main">{children}</main>
+        </div>
       </body>
     </html>
   );

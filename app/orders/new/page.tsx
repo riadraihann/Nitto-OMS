@@ -121,9 +121,15 @@ export default function NewOrderPage() {
   };
 
   return (
-    <main style={{ maxWidth: 960, margin: '2rem auto', padding: '0 1rem' }}>
-      <h1>New order</h1>
-      <form onSubmit={handleSubmit} style={{ display: 'grid', gap: '0.75rem' }}>
+    <div style={{ maxWidth: 960, margin: '0 auto' }}>
+      <div className="page-header">
+        <div>
+          <h1>New order</h1>
+          <p>Add an order that didn't come in through the Shopify sync.</p>
+        </div>
+      </div>
+
+      <form onSubmit={handleSubmit} className="card" style={{ display: 'grid', gap: '0.75rem' }}>
         <label>
           Order source
           <select name="order_source" value={form.order_source} onChange={handleChange}>
@@ -148,14 +154,14 @@ export default function NewOrderPage() {
           <textarea name="address" value={form.address} onChange={handleChange} required />
         </label>
 
-        <div style={{ border: '1px solid #ddd', borderRadius: '12px', padding: '1rem', display: 'grid', gap: '0.75rem' }}>
+        <div style={{ border: '1px solid var(--card-border)', background: 'var(--bg-page)', borderRadius: '10px', padding: 'var(--space-3)', display: 'grid', gap: '0.75rem' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <h2 style={{ margin: 0 }}>Line items</h2>
             <button type="button" className="btn-secondary" onClick={addItem}>Add another item</button>
           </div>
 
           {items.map((item, index) => (
-            <div key={`${index}-${item.sku}`} style={{ display: 'grid', gap: '0.5rem', padding: '0.75rem', border: '1px solid #eee', borderRadius: '8px' }}>
+            <div key={`${index}-${item.sku}`} style={{ display: 'grid', gap: '0.5rem', padding: '0.75rem', border: '1px solid var(--card-border)', borderRadius: '8px', background: '#fff' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <strong>Item {index + 1}</strong>
                 {items.length > 1 ? (
@@ -261,6 +267,6 @@ export default function NewOrderPage() {
         <button type="submit" disabled={submitting}>{submitting ? 'Saving...' : 'Create order'}</button>
         {message ? <p>{message}</p> : null}
       </form>
-    </main>
+    </div>
   );
 }

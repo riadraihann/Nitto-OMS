@@ -15,11 +15,35 @@
   --text-muted: #666;
   --border: #e8e8f0;
 
-  /* the one deliberately distinctive touch (see SiteHeader) -- sampled from the logo's
+  /* card chrome, per the admin-dashboard redesign -- a level lighter than --border so cards
+     read as a subtler outline than the older #e8e8f0 used for form controls */
+  --card-border: #e5e5ec;
+  --card-shadow: 0 1px 2px rgba(16, 24, 40, 0.04), 0 1px 3px rgba(16, 24, 40, 0.06);
+  --card-radius: 10px;
+
+  /* history's muted/grayscale accent -- deliberately desaturated so /history never reads as
+     "just another orders view" even mid-scroll (see .history-banner) */
+  --history-accent: #6b7280;
+  --history-accent-tint: #f1f1f4;
+  --history-text: #4b5563;
+
+  /* the one deliberately distinctive touch (see Sidebar) -- sampled from the logo's
      feather, blue through green through gold */
   --gradient-blue: #2fa8d5;
   --gradient-green: #5cb33c;
   --gradient-gold: #d3ae5c;
+
+  /* 8px-based spacing scale -- used for card/section padding and gaps throughout; --space-1
+     (4px) is the one half-step, kept for tight inline gaps (badge padding, icon gaps) */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 16px;
+  --space-4: 24px;
+  --space-5: 32px;
+  --space-6: 40px;
+  --space-7: 48px;
+
+  --sidebar-width: 248px;
 
   --font-body: var(--font-inter), system-ui, -apple-system, 'Segoe UI', sans-serif;
   --font-display: var(--font-display-font, var(--font-body));
@@ -49,6 +73,25 @@ a {
   color: var(--orchid-text);
 }
 
+/* Same same-frame press feedback as buttons (see below) for link-styled actions -- "Open
+   order", pagination, back-links -- so clicking one gives an immediate visual response even
+   before the page navigation it triggers has resolved. */
+a:active {
+  opacity: 0.6;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  button:not(:disabled):active,
+  .nav-pill:active,
+  .sidebar-link:active {
+    transform: none;
+  }
+}
+
+/* Button hierarchy: solid navy (default) = primary action per view (Add order, Apply,
+   Sync Now); outline navy = secondary (a real but non-primary action); btn-plain = tertiary/
+   low-emphasis (Back, Remove, Archive). Transitions are background/border-color only -- no
+   shadow or transform -- so hovering many buttons in a dense toolbar stays cheap to paint. */
 button {
   font-family: inherit;
   font-size: 0.95rem;
@@ -58,11 +101,20 @@ button {
   background: var(--navy);
   color: #fff;
   cursor: pointer;
+  transition: background-color 120ms ease, border-color 120ms ease, box-shadow 120ms ease, transform 80ms ease;
 }
 
 button:hover {
   background: var(--navy-dark);
   border-color: var(--navy-dark);
+}
+
+/* Instant "your click registered" feedback -- a same-frame press effect on mousedown, so a
+   button never feels unresponsive even when the action it triggers (a save, a page navigation)
+   takes a couple seconds to actually resolve. Transform-only, so it's compositor-cheap. */
+button:not(:disabled):active {
+  transform: scale(0.96);
+  transition-duration: 0ms;
 }
 
 button:disabled {
@@ -71,14 +123,14 @@ button:disabled {
 }
 
 button.btn-secondary {
-  background: var(--orchid);
-  border-color: var(--orchid);
+  background: transparent;
+  border-color: var(--navy);
   color: var(--navy);
   font-weight: 600;
 }
 
 button.btn-secondary:hover {
-  box-shadow: inset 0 0 0 2px var(--navy);
+  background: var(--navy-tint);
 }
 
 button.btn-plain {
@@ -122,11 +174,16 @@ label {
   color: var(--text);
   background: #fff;
   font-size: 0.9rem;
-  transition: background-color 120ms ease, border-color 120ms ease;
+  transition: background-color 120ms ease, border-color 120ms ease, transform 80ms ease;
 }
 
 .nav-pill:hover {
   background: var(--navy-tint);
+}
+
+.nav-pill:active {
+  transform: scale(0.96);
+  transition-duration: 0ms;
 }
 
 .nav-pill.active {
@@ -161,4 +218,268 @@ label {
 
 .order-row--hold:hover {
   background-color: #ffefb8;
+}
+
+/* ---------------------------------------------------------------------------------------
+   App shell: persistent left sidebar + light-gray content area. The sidebar is `position:
+   sticky` (not fixed) so it scrolls the normal document flow but stays pinned once it hits
+   the viewport top -- avoids the extra fixed-position stacking-context/z-index bookkeeping
+   fixed would need, with the same visual result for a single-column page.
+   --------------------------------------------------------------------------------------- */
+.app-shell {
+  display: flex;
+  align-items: flex-start;
+  min-height: 100vh;
+}
+
+.app-sidebar {
+  width: var(--sidebar-width);
+  flex-shrink: 0;
+  min-height: 100vh;
+  position: sticky;
+  top: 0;
+  align-self: flex-start;
+  background: var(--navy);
+  color: #fff;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+}
+
+.app-main {
+  flex: 1;
+  min-width: 0;
+  background: var(--bg-page);
+  min-height: 100vh;
+  padding: var(--space-4) var(--space-5);
+}
+
+.sidebar-logo-link {
+  display: block;
+  padding: var(--space-4) var(--space-3) var(--space-3);
+}
+
+.sidebar-logo-wrap {
+  display: inline-flex;
+  background: #fff;
+  border-radius: 8px;
+  padding: var(--space-2) var(--space-3);
+}
+
+.sidebar-logo-wrap img {
+  display: block;
+  height: 32px;
+  width: auto;
+}
+
+.sidebar-nav {
+  flex: 1;
+  padding: 0 var(--space-2) var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.sidebar-group-heading {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.55);
+  padding: 0 var(--space-3);
+  margin-bottom: var(--space-2);
+}
+
+.sidebar-group + .sidebar-group {
+  padding-top: var(--space-3);
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.sidebar-link {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: 0.55rem var(--space-3);
+  margin: 0 var(--space-2);
+  border-radius: 6px;
+  color: rgba(255, 255, 255, 0.82);
+  text-decoration: none;
+  font-size: 0.9rem;
+  transition: background-color 120ms ease, color 120ms ease, transform 80ms ease;
+}
+
+.sidebar-link:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+}
+
+.sidebar-link:active {
+  transform: scale(0.97);
+  transition-duration: 0ms;
+}
+
+.sidebar-link.active {
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+  font-weight: 600;
+}
+
+/* the one deliberately distinctive touch -- feather-gradient left accent on the active item */
+.sidebar-link.active::before {
+  content: '';
+  position: absolute;
+  left: -8px;
+  top: 4px;
+  bottom: 4px;
+  width: 3px;
+  border-radius: 2px;
+  background: linear-gradient(180deg, var(--gradient-blue), var(--gradient-green), var(--gradient-gold));
+}
+
+.sidebar-count {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.9);
+  background: rgba(255, 255, 255, 0.16);
+  border-radius: 999px;
+  padding: 0.1rem 0.45rem;
+  min-width: 1.4em;
+  text-align: center;
+}
+
+.sidebar-link.active .sidebar-count {
+  background: rgba(255, 255, 255, 0.25);
+}
+
+.sidebar-footer {
+  padding: var(--space-3);
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.sidebar-footer .sidebar-link {
+  margin: 0;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.sidebar-signout {
+  width: 100%;
+  background: transparent;
+  border-color: rgba(255, 255, 255, 0.35);
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.sidebar-signout:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.5);
+}
+
+/* ---------------------------------------------------------------------------------------
+   Cards: the wrapper for every distinct content block (filter bar, table/list, report
+   section) on a light-gray page background, per the redesign brief.
+   --------------------------------------------------------------------------------------- */
+.card {
+  background: #fff;
+  border: 1px solid var(--card-border);
+  border-radius: var(--card-radius);
+  box-shadow: var(--card-shadow);
+  padding: var(--space-4);
+}
+
+.card + .card {
+  margin-top: var(--space-4);
+}
+
+/* Page header zone: title + count + primary action, visually separated from the content
+   cards below it by spacing alone (no border/background) so it reads as chrome, not a card. */
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  margin-bottom: var(--space-4);
+}
+
+.page-header h1 {
+  margin: 0 0 var(--space-1);
+}
+
+.page-header p {
+  margin: 0;
+  color: var(--text-muted);
+}
+
+/* ---------------------------------------------------------------------------------------
+   History's distinct treatment: a muted/grayscale accent (instead of navy/orchid) plus a
+   banner that stays visible mid-scroll, so /history never reads as just another /orders view.
+   --------------------------------------------------------------------------------------- */
+.history-banner {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  background: var(--history-accent-tint);
+  color: var(--history-text);
+  border: 1px solid var(--card-border);
+  border-left: 4px solid var(--history-accent);
+  border-radius: var(--card-radius);
+  padding: 0.7rem var(--space-4);
+  font-weight: 700;
+  margin-bottom: var(--space-4);
+}
+
+.history-banner .history-banner-sub {
+  font-weight: 400;
+  color: var(--text-muted);
+}
+
+.history-page a {
+  color: var(--history-text);
+}
+
+.history-page .order-open-link {
+  color: var(--history-text) !important;
+}
+
+.history-page .order-row:hover {
+  background-color: var(--history-accent-tint);
+}
+
+/* read-only status pills on the History list view (item 8 of the redesign brief): same badge
+   shape as the editable version elsewhere, but no select chrome, so it's visibly not editable */
+.status-pill-static {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 0.25rem 0.6rem;
+  font-size: 0.85rem;
+}
+
+/* ---------------------------------------------------------------------------------------
+   Route-transition loading skeleton (see app/loading.tsx and the per-section loading.tsx
+   files) -- Next.js shows this instantly, client-side, the moment a link to a Server
+   Component page is clicked, while that page's data fetch is still in flight. Fixes the
+   "nothing happens for a couple seconds" feel of navigating to a page that queries Supabase.
+   --------------------------------------------------------------------------------------- */
+@keyframes skeleton-shimmer {
+  0% { background-position: -200px 0; }
+  100% { background-position: calc(200px + 100%) 0; }
+}
+
+.skeleton {
+  background: linear-gradient(90deg, #ececf1 25%, #f5f5f8 37%, #ececf1 63%);
+  background-size: 400px 100%;
+  animation: skeleton-shimmer 1.4s ease-in-out infinite;
+  border-radius: 6px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton {
+    animation: none;
+    background: #eee;
+  }
 }

@@ -28,10 +28,10 @@ const FEEDBACK_FILTER = 'happiness_score.not.is.null,product_suggestions.not.is.
 export default async function FeedbackReportPage({ searchParams }: ReportPageProps) {
   if (!supabaseAdmin) {
     return (
-      <main style={{ maxWidth: 1100, margin: '2rem auto', padding: '0 1rem' }}>
+      <div style={{ maxWidth: 1100, margin: '0 auto' }}>
         <h1>Feedback report</h1>
         <p>Supabase is not configured yet.</p>
-      </main>
+      </div>
     );
   }
 
@@ -87,10 +87,10 @@ export default async function FeedbackReportPage({ searchParams }: ReportPagePro
 
   if (errorMessage) {
     return (
-      <main style={{ maxWidth: 1100, margin: '2rem auto', padding: '0 1rem' }}>
+      <div style={{ maxWidth: 1100, margin: '0 auto' }}>
         <h1>Feedback report</h1>
         <p>Unable to load report: {errorMessage}</p>
-      </main>
+      </div>
     );
   }
 
@@ -105,80 +105,84 @@ export default async function FeedbackReportPage({ searchParams }: ReportPagePro
   const pageSizeHrefs = PAGE_SIZE_OPTIONS.map((size) => ({ size, href: buildQueryHref('/reports/feedback', currentParams, { page_size: size, page: 1 }) }));
 
   return (
-    <main style={{ maxWidth: 1100, margin: '2rem auto', padding: '0 1rem' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+    <div style={{ maxWidth: 1100, margin: '0 auto' }}>
+      <div className="page-header">
         <div>
-          <h1 style={{ marginBottom: '0.25rem' }}>Feedback report</h1>
-          <p style={{ margin: 0, color: '#666' }}>Orders with a happiness score and/or product suggestions recorded.</p>
+          <h1>Feedback report <span style={{ color: '#666', fontWeight: 400, fontSize: '1.1rem' }}>({totalCount})</span></h1>
+          <p>Orders with a happiness score and/or product suggestions recorded.</p>
         </div>
         <Link href="/orders" className="nav-pill">← Back to orders</Link>
       </div>
 
-      <form action="/reports/feedback" method="get" style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center', marginBottom: '1rem' }}>
-        <label style={{ display: 'flex', gap: '0.35rem', alignItems: 'center', fontSize: '0.9rem' }}>
-          From
-          <input type="date" name="date_from" defaultValue={dateFrom} />
-        </label>
-        <label style={{ display: 'flex', gap: '0.35rem', alignItems: 'center', fontSize: '0.9rem' }}>
-          To
-          <input type="date" name="date_to" defaultValue={dateTo} />
-        </label>
-        <button type="submit">Apply</button>
-        <Link href="/reports/feedback" className="nav-pill">
-          Clear
-        </Link>
-      </form>
+      <div className="card">
+        <form action="/reports/feedback" method="get" style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
+          <label style={{ display: 'flex', gap: '0.35rem', alignItems: 'center', fontSize: '0.9rem' }}>
+            From
+            <input type="date" name="date_from" defaultValue={dateFrom} />
+          </label>
+          <label style={{ display: 'flex', gap: '0.35rem', alignItems: 'center', fontSize: '0.9rem' }}>
+            To
+            <input type="date" name="date_to" defaultValue={dateTo} />
+          </label>
+          <button type="submit" className="btn-secondary">Apply</button>
+          <Link href="/reports/feedback" className="nav-pill">
+            Clear
+          </Link>
+        </form>
+      </div>
 
-      <div style={{ borderLeft: '4px solid #0a2472', background: '#eaeef7', borderRadius: '8px', padding: '0.85rem 1rem', marginBottom: '1rem', fontWeight: 700, color: '#0a2472' }}>
+      <div style={{ borderLeft: '4px solid var(--navy)', background: 'var(--navy-tint)', borderRadius: '8px', padding: '0.85rem 1rem', marginBottom: 'var(--space-4)', fontWeight: 700, color: 'var(--navy)' }}>
         {totalCount} order{totalCount === 1 ? '' : 's'} with feedback · Average happiness score: {avgHappiness !== null ? avgHappiness.toFixed(2) : 'n/a'} · {suggestionCount} with product suggestions
       </div>
 
-      <PaginationBar
-        variant="compact"
-        page={page}
-        pageSize={pageSize}
-        totalCount={totalCount}
-        visibleCount={rows.length}
-        itemLabel="orders"
-        prevHref={prevHref}
-        nextHref={nextHref}
-        pageSizeHrefs={pageSizeHrefs}
-      />
+      <div className="card">
+        <PaginationBar
+          variant="compact"
+          page={page}
+          pageSize={pageSize}
+          totalCount={totalCount}
+          visibleCount={rows.length}
+          itemLabel="orders"
+          prevHref={prevHref}
+          nextHref={nextHref}
+          pageSizeHrefs={pageSizeHrefs}
+        />
 
-      <div style={{ display: 'grid', gap: '0.75rem' }}>
-        {rows.map((row) => (
-          <article key={row.id} style={{ border: '1px solid #e5e7eb', borderRadius: '12px', padding: '1rem' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap' }}>
-              <div>
-                <div style={{ fontSize: '0.9rem', color: '#666' }}>{row.order_number ?? `Order #${row.id}`}</div>
-                <Link href={`/orders/${row.id}`} style={{ fontSize: '1.05rem', fontWeight: 700, color: '#a83aa3' }}>{row.customer_name}</Link>
-                <div style={{ color: '#666', marginTop: '0.15rem', fontSize: '0.85rem' }}>{new Date(row.created_at).toLocaleString()}</div>
+        <div style={{ display: 'grid', gap: '0.75rem' }}>
+          {rows.map((row) => (
+            <article key={row.id} style={{ border: '1px solid var(--card-border)', borderRadius: '10px', padding: '1rem' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap' }}>
+                <div>
+                  <div style={{ fontSize: '0.9rem', color: '#666' }}>{row.order_number ?? `Order #${row.id}`}</div>
+                  <Link href={`/orders/${row.id}`} style={{ fontSize: '1.05rem', fontWeight: 700, color: '#a83aa3' }}>{row.customer_name}</Link>
+                  <div style={{ color: '#666', marginTop: '0.15rem', fontSize: '0.85rem' }}>{new Date(row.created_at).toLocaleString()}</div>
+                </div>
+                <div style={{ textAlign: 'right' }}>
+                  <div style={{ fontWeight: 700 }}>{row.happiness_score !== null ? `Happiness: ${row.happiness_score}` : 'No score'}</div>
+                </div>
               </div>
-              <div style={{ textAlign: 'right' }}>
-                <div style={{ fontWeight: 700 }}>{row.happiness_score !== null ? `Happiness: ${row.happiness_score}` : 'No score'}</div>
-              </div>
-            </div>
-            {row.product_suggestions ? (
-              <div style={{ marginTop: '0.6rem', color: '#374151', fontSize: '0.9rem' }}>
-                <strong>Suggestion:</strong> {row.product_suggestions}
-              </div>
-            ) : null}
-          </article>
-        ))}
-        {rows.length === 0 ? <p style={{ color: '#666' }}>No feedback recorded for this range.</p> : null}
+              {row.product_suggestions ? (
+                <div style={{ marginTop: '0.6rem', color: '#374151', fontSize: '0.9rem' }}>
+                  <strong>Suggestion:</strong> {row.product_suggestions}
+                </div>
+              ) : null}
+            </article>
+          ))}
+          {rows.length === 0 ? <p style={{ color: '#666' }}>No feedback recorded for this range.</p> : null}
+        </div>
+
+        <PaginationBar
+          variant="full"
+          page={page}
+          pageSize={pageSize}
+          totalCount={totalCount}
+          visibleCount={rows.length}
+          itemLabel="orders"
+          prevHref={prevHref}
+          nextHref={nextHref}
+          pageSizeHrefs={pageSizeHrefs}
+        />
       </div>
-
-      <PaginationBar
-        variant="full"
-        page={page}
-        pageSize={pageSize}
-        totalCount={totalCount}
-        visibleCount={rows.length}
-        itemLabel="orders"
-        prevHref={prevHref}
-        nextHref={nextHref}
-        pageSizeHrefs={pageSizeHrefs}
-      />
-    </main>
+    </div>
   );
 }

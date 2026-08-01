@@ -7,9 +7,11 @@ import { createServerClient } from '@supabase/ssr';
 const supabaseUrl = (process.env as unknown as Record<string, string | undefined>).NEXT_PUBLIC_SUPABASE_URL?.trim() ?? '';
 const supabaseAnonKey = (process.env as unknown as Record<string, string | undefined>).NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim() ?? '';
 
-// extend this as future admin-only pages are added -- SiteHeader's nav filter and this array
-// both key off the same route prefixes, declared once (see app/components/SiteHeader.tsx).
-const ADMIN_ONLY_ROUTE_PREFIXES = ['/reports/products-by-date'];
+// extend this as future admin-only pages are added -- Sidebar's nav filter and this array
+// both key off the same route prefixes, declared once (see app/components/Sidebar.tsx).
+// /settings (Archived orders) and /reports/ignored-flags are the redesign's "rarely-needed
+// recovery/audit tool" area -- deliberately admin-gated rather than daily-workflow tabs.
+const ADMIN_ONLY_ROUTE_PREFIXES = ['/reports/products-by-date', '/settings', '/reports/ignored-flags'];
 
 export async function middleware(request: NextRequest) {
   const response = NextResponse.next({ request });

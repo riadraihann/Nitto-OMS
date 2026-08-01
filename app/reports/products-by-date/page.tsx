@@ -66,10 +66,10 @@ export default async function ProductsByDatePage({ searchParams }: ReportPagePro
 
   if (!supabaseAdmin) {
     return (
-      <main style={{ maxWidth: 1100, margin: '2rem auto', padding: '0 1rem' }}>
+      <div style={{ maxWidth: 1100, margin: '0 auto' }}>
         <h1>Products by date</h1>
         <p>Supabase is not configured yet.</p>
-      </main>
+      </div>
     );
   }
 
@@ -88,10 +88,10 @@ export default async function ProductsByDatePage({ searchParams }: ReportPagePro
 
   if (errorMessage) {
     return (
-      <main style={{ maxWidth: 1100, margin: '2rem auto', padding: '0 1rem' }}>
+      <div style={{ maxWidth: 1100, margin: '0 auto' }}>
         <h1>Products by date</h1>
         <p>Unable to load report: {errorMessage}</p>
-      </main>
+      </div>
     );
   }
 
@@ -146,41 +146,42 @@ export default async function ProductsByDatePage({ searchParams }: ReportPagePro
   const grandTotalValue = sortedBaseGroups.reduce((sum, g) => sum + g.subtotal, 0);
 
   return (
-    <main style={{ maxWidth: 1100, margin: '2rem auto', padding: '0 1rem' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+    <div style={{ maxWidth: 1100, margin: '0 auto' }}>
+      <div className="page-header">
         <div>
-          <h1 style={{ marginBottom: '0.25rem' }}>Products by date</h1>
-          <p style={{ margin: 0, color: '#666' }}>Quantity and value ordered per product, grouped by variant with grand totals per product.</p>
+          <h1>Products by date</h1>
+          <p>Quantity and value ordered per product, grouped by variant with grand totals per product.</p>
         </div>
         <Link href="/orders" className="nav-pill">← Back to orders</Link>
       </div>
 
-      <form action="/reports/products-by-date" method="get" style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center', marginBottom: '1rem' }}>
-        <label style={{ display: 'flex', gap: '0.35rem', alignItems: 'center', fontSize: '0.9rem' }}>
-          From
-          <input type="date" name="date_from" defaultValue={dateFrom} />
-        </label>
-        <label style={{ display: 'flex', gap: '0.35rem', alignItems: 'center', fontSize: '0.9rem' }}>
-          To
-          <input type="date" name="date_to" defaultValue={dateTo} />
-        </label>
-        <button type="submit">Apply</button>
-        <Link href="/reports/products-by-date" className="nav-pill">
-          Clear
-        </Link>
-      </form>
+      <div className="card">
+        <form action="/reports/products-by-date" method="get" style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
+          <label style={{ display: 'flex', gap: '0.35rem', alignItems: 'center', fontSize: '0.9rem' }}>
+            From
+            <input type="date" name="date_from" defaultValue={dateFrom} />
+          </label>
+          <label style={{ display: 'flex', gap: '0.35rem', alignItems: 'center', fontSize: '0.9rem' }}>
+            To
+            <input type="date" name="date_to" defaultValue={dateTo} />
+          </label>
+          <button type="submit" className="btn-secondary">Apply</button>
+          <Link href="/reports/products-by-date" className="nav-pill">
+            Clear
+          </Link>
+        </form>
+        {!dateFrom && !dateTo ? (
+          <p style={{ color: '#666', fontStyle: 'italic', margin: 'var(--space-3) 0 0' }}>Showing all-time data. Pick a date or range above to narrow it down.</p>
+        ) : null}
+      </div>
 
-      {!dateFrom && !dateTo ? (
-        <p style={{ color: '#666', fontStyle: 'italic', marginBottom: '1rem' }}>Showing all-time data. Pick a date or range above to narrow it down.</p>
-      ) : null}
-
-      <div style={{ borderLeft: '4px solid #0a2472', background: '#eaeef7', borderRadius: '8px', padding: '0.85rem 1rem', marginBottom: '1rem', fontWeight: 700, color: '#0a2472' }}>
+      <div style={{ borderLeft: '4px solid var(--navy)', background: 'var(--navy-tint)', borderRadius: '8px', padding: '0.85rem 1rem', marginBottom: 'var(--space-4)', fontWeight: 700, color: 'var(--navy)' }}>
         Grand total: {grandTotalQuantity} items · ৳{grandTotalValue.toFixed(2)}
       </div>
 
-      <div style={{ display: 'grid', gap: '0.75rem' }}>
+      <div className="card" style={{ display: 'grid', gap: '0.75rem' }}>
         {sortedBaseGroups.map((group) => (
-          <article key={group.base} style={{ border: '1px solid #e5e7eb', borderRadius: '12px', padding: '1rem' }}>
+          <article key={group.base} style={{ border: '1px solid var(--card-border)', borderRadius: '10px', padding: '1rem' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', flexWrap: 'wrap', gap: '0.5rem' }}>
               <h2 style={{ margin: 0, fontSize: '1.1rem' }}>{group.base}</h2>
               <div style={{ fontWeight: 700, color: '#a83aa3' }}>{group.quantity} items · ৳{group.subtotal.toFixed(2)}</div>
@@ -201,6 +202,6 @@ export default async function ProductsByDatePage({ searchParams }: ReportPagePro
 
         {sortedBaseGroups.length === 0 ? <p style={{ color: '#666' }}>No orders found for this range.</p> : null}
       </div>
-    </main>
+    </div>
   );
 }

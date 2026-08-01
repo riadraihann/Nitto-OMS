@@ -242,52 +242,57 @@ export default function OrderDetailPage() {
   };
 
   if (!order) {
-    return <main style={{ maxWidth: 960, margin: '2rem auto', padding: '0 1rem' }}>Loading...</main>;
+    return <div style={{ maxWidth: 960, margin: '0 auto' }}>Loading...</div>;
   }
 
   const computedSubtotal = (order.order_items ?? []).reduce((sum, item) => sum + item.quantity * item.unit_price, 0);
   const subtotal = order.total_amount ?? computedSubtotal;
 
   return (
-    <main style={{ maxWidth: 960, margin: '2rem auto', padding: '0 1rem' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '1rem' }}>
-        <button className="btn-plain" onClick={() => router.push(`/orders?updated=${Date.now()}`)} style={{ marginBottom: '1rem' }}>← Back to orders</button>
+    <div style={{ maxWidth: 960, margin: '0 auto' }}>
+      <div className="page-header">
+        <div>
+          <button type="button" className="nav-pill" onClick={() => router.push(`/orders?updated=${Date.now()}`)} style={{ marginBottom: 'var(--space-2)' }}>← Back to orders</button>
+          <div style={{ fontSize: '0.9rem', color: '#666' }}>{order.order_number ?? `Order #${order.id}`}</div>
+          <h1 style={{ marginBottom: 'var(--space-2)' }}>{order.customer_name}</h1>
+          <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap' }}>
+            <span style={{ ...statusBadgeStyle(order.urgency_type), borderRadius: '999px', padding: '0.25rem 0.6rem', fontSize: '0.85rem' }}>{urgencyLabel(order.urgency_type, order.urgency_target_date)}</span>
+            <span style={{ ...statusBadgeStyle(order.confirmation_status), borderRadius: '999px', padding: '0.25rem 0.6rem', fontSize: '0.85rem' }}>{statusLabel(order.confirmation_status)}</span>
+            <span style={{ ...statusBadgeStyle(order.delivery_status), borderRadius: '999px', padding: '0.25rem 0.6rem', fontSize: '0.85rem' }}>{statusLabel(order.delivery_status)}</span>
+            {order.archived_at ? (
+              <span style={{ background: '#f0f0f0', color: '#616161', borderRadius: '999px', padding: '0.25rem 0.6rem', fontSize: '0.85rem' }}>
+                Archived {new Date(order.archived_at).toLocaleDateString()}
+              </span>
+            ) : null}
+          </div>
+        </div>
         <button type="button" className="btn-plain" onClick={toggleArchived} disabled={saving}>
           {order.archived_at ? 'Restore order' : 'Archive order'}
         </button>
       </div>
-      <div style={{ fontSize: '0.9rem', color: '#666' }}>{order.order_number ?? `Order #${order.id}`}</div>
-      <h1>{order.customer_name}</h1>
-      <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap', marginBottom: '0.75rem' }}>
-        <span style={{ ...statusBadgeStyle(order.urgency_type), borderRadius: '999px', padding: '0.25rem 0.6rem', fontSize: '0.85rem' }}>{urgencyLabel(order.urgency_type, order.urgency_target_date)}</span>
-        <span style={{ ...statusBadgeStyle(order.confirmation_status), borderRadius: '999px', padding: '0.25rem 0.6rem', fontSize: '0.85rem' }}>{statusLabel(order.confirmation_status)}</span>
-        <span style={{ ...statusBadgeStyle(order.delivery_status), borderRadius: '999px', padding: '0.25rem 0.6rem', fontSize: '0.85rem' }}>{statusLabel(order.delivery_status)}</span>
-        {order.archived_at ? (
-          <span style={{ background: '#f0f0f0', color: '#616161', borderRadius: '999px', padding: '0.25rem 0.6rem', fontSize: '0.85rem' }}>
-            Archived {new Date(order.archived_at).toLocaleDateString()}
-          </span>
+
+      <div className="card">
+        <p style={{ margin: '0 0 0.4rem' }}>Created: {new Date(order.created_at).toLocaleString()}</p>
+        <p style={{ margin: '0 0 0.4rem' }}>Phone: <a href={telHref(order.phone)}>{order.phone}</a></p>
+        <p style={{ margin: 0 }}>Address: {order.address}</p>
+
+        {(order.visible_needs_review_reasons ?? []).length > 0 ? (
+          <div style={{ background: '#fff3e0', color: '#8a5300', borderRadius: '8px', padding: '0.6rem 0.85rem', marginTop: 'var(--space-3)' }}>
+            <strong>Needs review:</strong>
+            {(order.visible_needs_review_reasons ?? []).map((reason) => (
+              <div key={reason} style={{ marginTop: '0.35rem' }}>
+                {NEEDS_REVIEW_REASON_LABELS[reason] ?? reason}
+                <FlagActions orderId={order.id} flagType={reason} sourceSystem="needs_review" onActioned={loadOrder} />
+              </div>
+            ))}
+          </div>
         ) : null}
       </div>
-      <p>Created: {new Date(order.created_at).toLocaleString()}</p>
-      <p>Phone: <a href={telHref(order.phone)}>{order.phone}</a></p>
-      <p>Address: {order.address}</p>
 
-      {(order.visible_needs_review_reasons ?? []).length > 0 ? (
-        <div style={{ background: '#fff3e0', color: '#8a5300', borderRadius: '8px', padding: '0.6rem 0.85rem', marginBottom: '1rem' }}>
-          <strong>Needs review:</strong>
-          {(order.visible_needs_review_reasons ?? []).map((reason) => (
-            <div key={reason} style={{ marginTop: '0.35rem' }}>
-              {NEEDS_REVIEW_REASON_LABELS[reason] ?? reason}
-              <FlagActions orderId={order.id} flagType={reason} sourceSystem="needs_review" onActioned={loadOrder} />
-            </div>
-          ))}
-        </div>
-      ) : null}
-
-      <div style={{ border: '1px solid #ddd', borderRadius: '12px', padding: '1rem', marginTop: '1rem' }}>
+      <div className="card">
         <h2 style={{ marginTop: 0 }}>Items</h2>
         {(order.order_items ?? []).map((item, index) => (
-          <div key={`${item.sku}-${index}`} style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', padding: '0.5rem 0', borderBottom: '1px solid #f0f0f0' }}>
+          <div key={`${item.sku}-${index}`} style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', padding: '0.5rem 0', borderBottom: '1px solid var(--card-border)' }}>
             <div>
               <div style={{ fontWeight: 600 }}>{item.product_name}</div>
               <div style={{ color: '#666' }}>SKU: {item.sku}</div>
@@ -301,7 +306,7 @@ export default function OrderDetailPage() {
         <div style={{ marginTop: '0.75rem', fontWeight: 700 }}>Subtotal: ৳{subtotal.toFixed(2)}</div>
       </div>
 
-      <div style={{ display: 'grid', gap: '0.75rem', marginTop: '1rem' }}>
+      <div className="card" style={{ display: 'grid', gap: '0.75rem' }}>
         <div>
           <label>Contact attempts</label>
           <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.25rem', flexWrap: 'wrap', alignItems: 'center' }}>
@@ -424,10 +429,13 @@ export default function OrderDetailPage() {
         </div>
       </div>
 
-      {saving ? <p>Saving...</p> : null}
-      {message ? <p>{message}</p> : null}
+      {saving || message ? (
+        <div style={{ margin: 'var(--space-2) 0 0', fontSize: '0.85rem', color: saving ? 'var(--text-muted)' : 'var(--text)' }}>
+          {saving ? 'Saving...' : message}
+        </div>
+      ) : null}
 
-      <div style={{ border: '1px solid #ddd', borderRadius: '12px', padding: '1rem', marginTop: '1.5rem' }}>
+      <div className="card">
         <h2 style={{ marginTop: 0 }}>History</h2>
         {historyLoading ? (
           <p style={{ color: '#666' }}>Loading history...</p>
@@ -436,7 +444,7 @@ export default function OrderDetailPage() {
         ) : (
           <div style={{ display: 'grid', gap: '0.5rem' }}>
             {history.map((entry) => (
-              <div key={entry.id} style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', padding: '0.5rem 0', borderBottom: '1px solid #f0f0f0', fontSize: '0.9rem' }}>
+              <div key={entry.id} style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', padding: '0.5rem 0', borderBottom: '1px solid var(--card-border)', fontSize: '0.9rem' }}>
                 <div>
                   <strong>{formatHistoryField(entry.field)}</strong>
                   {entry.field === 'order_created' || entry.field === 'order_items' || entry.field === 'removed_from_sheet_at' ? (
@@ -458,6 +466,6 @@ export default function OrderDetailPage() {
           </div>
         )}
       </div>
-    </main>
+    </div>
   );
 }

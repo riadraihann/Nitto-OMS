@@ -52,10 +52,10 @@ function getParam(value: string | string[] | undefined) {
 export default async function HistoryPage({ searchParams }: HistoryPageProps) {
   if (!supabaseAdmin) {
     return (
-      <main style={{ maxWidth: 1100, margin: '2rem auto', padding: '0 1rem' }}>
+      <div style={{ maxWidth: 1100, margin: '0 auto' }}>
         <h1>History</h1>
         <p>Supabase is not configured yet.</p>
-      </main>
+      </div>
     );
   }
 
@@ -108,10 +108,10 @@ export default async function HistoryPage({ searchParams }: HistoryPageProps) {
 
   if (errorMessage) {
     return (
-      <main style={{ maxWidth: 1100, margin: '2rem auto', padding: '0 1rem' }}>
+      <div style={{ maxWidth: 1100, margin: '0 auto' }}>
         <h1>History</h1>
         <p>Unable to load orders: {errorMessage}</p>
-      </main>
+      </div>
     );
   }
 
@@ -136,70 +136,71 @@ export default async function HistoryPage({ searchParams }: HistoryPageProps) {
   const pageSizeHrefs = PAGE_SIZE_OPTIONS.map((size) => ({ size, href: buildQueryHref('/history', currentParams, { page_size: size, page: 1 }) }));
 
   return (
-    <main style={{ maxWidth: 1100, margin: '2rem auto', padding: '0 1rem' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+    <div className="history-page" style={{ maxWidth: 1100, margin: '0 auto' }}>
+      <div className="history-banner">
+        <span>History — completed orders</span>
+        <span className="history-banner-sub">Already sent to courier or delivered. Read-only status -- open an order to correct it.</span>
+      </div>
+
+      <div className="page-header">
         <div>
-          <h1 style={{ marginBottom: '0.25rem' }}>History</h1>
-          <p style={{ margin: 0, color: '#666' }}>Orders already sent to courier or delivered -- the equivalent of the old Weblog sheet.</p>
+          <h1>History <span style={{ color: '#666', fontWeight: 400, fontSize: '1.1rem' }}>({totalCount})</span></h1>
+          <p>Orders already sent to courier or delivered -- the equivalent of the old Weblog sheet.</p>
         </div>
         <Link href="/orders" className="nav-pill">← Back to active orders</Link>
       </div>
 
-      <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginBottom: '1rem' }}>
-        <Link href="/orders" className="nav-pill">Orders</Link>
-        <Link href="/history" className="nav-pill active">History</Link>
-        <Link href="/reports/products-by-date" className="nav-pill">Products by date report</Link>
-        <Link href="/reports/attention-needed" className="nav-pill">Attention Needed</Link>
-        <Link href="/reports/feedback" className="nav-pill">Feedback report</Link>
+      <div className="card">
+        <form action="/history" method="get" style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
+          <label style={{ display: 'flex', gap: '0.35rem', alignItems: 'center', fontSize: '0.9rem' }}>
+            From
+            <input type="date" name="date_from" defaultValue={dateFrom} />
+          </label>
+          <label style={{ display: 'flex', gap: '0.35rem', alignItems: 'center', fontSize: '0.9rem' }}>
+            To
+            <input type="date" name="date_to" defaultValue={dateTo} />
+          </label>
+          <select name="urgency_type" defaultValue={urgency}>
+            <option value="">All urgencies</option>
+            <option value="normal">Normal</option>
+            <option value="urgent">Urgent</option>
+            <option value="hold">Hold</option>
+            <option value="vu">VU (Very Urgent)</option>
+            <option value="d">D (Dispatch)</option>
+          </select>
+          <select name="confirmation_status" defaultValue={confirmation}>
+            <option value="">All confirmations</option>
+            {confirmationStatusOptions.map((status) => (
+              <option key={status} value={status}>{statusLabel(status)}</option>
+            ))}
+          </select>
+          {/* only these two statuses are ever "history" -- packaging/returned live on /orders */}
+          <select name="delivery_status" defaultValue={delivery}>
+            <option value="">Sent to courier + Delivered</option>
+            <option value="sent_to_courier">Sent to courier</option>
+            <option value="delivered">Delivered</option>
+          </select>
+          <button type="submit" className="btn-secondary">Apply</button>
+          <Link href="/history" className="nav-pill">
+            Clear
+          </Link>
+        </form>
       </div>
 
-      <form action="/history" method="get" style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center', marginBottom: '1rem' }}>
-        <label style={{ display: 'flex', gap: '0.35rem', alignItems: 'center', fontSize: '0.9rem' }}>
-          From
-          <input type="date" name="date_from" defaultValue={dateFrom} />
-        </label>
-        <label style={{ display: 'flex', gap: '0.35rem', alignItems: 'center', fontSize: '0.9rem' }}>
-          To
-          <input type="date" name="date_to" defaultValue={dateTo} />
-        </label>
-        <select name="urgency_type" defaultValue={urgency}>
-          <option value="">All urgencies</option>
-          <option value="normal">Normal</option>
-          <option value="urgent">Urgent</option>
-          <option value="hold">Hold</option>
-          <option value="vu">VU (Very Urgent)</option>
-          <option value="d">D (Dispatch)</option>
-        </select>
-        <select name="confirmation_status" defaultValue={confirmation}>
-          <option value="">All confirmations</option>
-          {confirmationStatusOptions.map((status) => (
-            <option key={status} value={status}>{statusLabel(status)}</option>
-          ))}
-        </select>
-        {/* only these two statuses are ever "history" -- packaging/returned live on /orders */}
-        <select name="delivery_status" defaultValue={delivery}>
-          <option value="">Sent to courier + Delivered</option>
-          <option value="sent_to_courier">Sent to courier</option>
-          <option value="delivered">Delivered</option>
-        </select>
-        <button type="submit">Apply</button>
-        <Link href="/history" className="nav-pill">
-          Clear
-        </Link>
-      </form>
-
-      <OrdersList
-        orders={orders}
-        view=""
-        bucket="history"
-        totalCount={totalCount}
-        page={page}
-        pageSize={pageSize}
-        prevHref={prevHref}
-        nextHref={nextHref}
-        pageSizeHrefs={pageSizeHrefs}
-        itemLabel="orders"
-      />
-    </main>
+      <div className="card">
+        <OrdersList
+          orders={orders}
+          view=""
+          bucket="history"
+          totalCount={totalCount}
+          page={page}
+          pageSize={pageSize}
+          prevHref={prevHref}
+          nextHref={nextHref}
+          pageSizeHrefs={pageSizeHrefs}
+          itemLabel="orders"
+        />
+      </div>
+    </div>
   );
 }

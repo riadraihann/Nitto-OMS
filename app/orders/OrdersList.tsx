@@ -507,63 +507,74 @@ export default function OrdersList({ orders: initialOrders, view, bucket, totalC
                   }) : null}
                 </div>
 
-                <div style={{ marginTop: '0.75rem', display: 'flex', gap: '0.75rem', flexWrap: 'wrap', alignItems: 'center' }}>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.85rem' }}>
-                    Urgency
-                    <select
-                      value={displayedUrgencyType}
-                      onChange={(e) => handleUrgencyTypeChange(order.id, e.target.value)}
-                      style={{ ...statusBadgeStyle(displayedUrgencyType), border: 'none', borderRadius: '999px', padding: '0.25rem 0.6rem' }}
-                    >
-                      {urgencyTypeOptions.map((type) => (
-                        <option key={type} value={type}>{urgencyTypeOptionLabel(type)}</option>
-                      ))}
-                    </select>
-                  </label>
-                  {displayedUrgencyType === 'vu' || displayedUrgencyType === 'd' ? (
-                    <input
-                      type="number"
-                      min="1"
-                      max="31"
-                      placeholder="Day (1-31)"
-                      key={`${order.id}-${order.urgency_target_date ?? 'unset'}`}
-                      defaultValue={order.urgency_target_date ? new Date(order.urgency_target_date).getUTCDate() : ''}
-                      onBlur={(e) => handleUrgencyDayCommit(order.id, displayedUrgencyType, e.target.value)}
-                      onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }}
-                      style={{ width: '5.5rem', fontSize: '0.85rem' }}
-                    />
-                  ) : null}
-                  <label style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.85rem' }}>
-                    Status
-                    <select
-                      value={order.confirmation_status}
-                      onChange={(e) => updateField(order.id, 'confirmation_status', e.target.value)}
-                      style={{ ...statusBadgeStyle(order.confirmation_status), border: 'none', borderRadius: '999px', padding: '0.25rem 0.6rem' }}
-                    >
-                      {confirmationStatusOptions.map((step) => (
-                        <option key={step} value={step}>{statusLabel(step)}</option>
-                      ))}
-                    </select>
-                  </label>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.85rem' }}>
-                    Delivery
-                    <select
-                      value={order.delivery_status}
-                      onChange={(e) => updateField(order.id, 'delivery_status', e.target.value)}
-                      style={{ ...statusBadgeStyle(order.delivery_status), border: 'none', borderRadius: '999px', padding: '0.25rem 0.6rem' }}
-                    >
-                      {deliveryOptions.map((step) => (
-                        <option key={step} value={step}>{statusLabel(step)}</option>
-                      ))}
-                    </select>
-                  </label>
-                  {savingIds.has(order.id) ? <span style={{ fontSize: '0.8rem', color: '#666' }}>Saving...</span> : null}
-                  {rowErrors[order.id] ? <span style={{ fontSize: '0.8rem', color: '#c62828' }}>{rowErrors[order.id]}</span> : null}
-                  {rowWarnings[order.id] ? <span style={{ fontSize: '0.8rem', color: '#ef6c00' }}>{rowWarnings[order.id]}</span> : null}
-                </div>
+                {bucket === 'history' ? (
+                  // History is read-only for these three fields (item 8 of the redesign brief)
+                  // -- these are resolved orders, so no selects here; open the order's detail
+                  // view to review or correct past status if genuinely needed.
+                  <div style={{ marginTop: '0.75rem', display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
+                    <span className="status-pill-static" style={statusBadgeStyle(order.urgency_type)}>{urgencyTypeOptionLabel(order.urgency_type)}</span>
+                    <span className="status-pill-static" style={statusBadgeStyle(order.confirmation_status)}>{statusLabel(order.confirmation_status)}</span>
+                    <span className="status-pill-static" style={statusBadgeStyle(order.delivery_status)}>{statusLabel(order.delivery_status)}</span>
+                  </div>
+                ) : (
+                  <div style={{ marginTop: '0.75rem', display: 'flex', gap: '0.75rem', flexWrap: 'wrap', alignItems: 'center' }}>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.85rem' }}>
+                      Urgency
+                      <select
+                        value={displayedUrgencyType}
+                        onChange={(e) => handleUrgencyTypeChange(order.id, e.target.value)}
+                        style={{ ...statusBadgeStyle(displayedUrgencyType), border: 'none', borderRadius: '999px', padding: '0.25rem 0.6rem' }}
+                      >
+                        {urgencyTypeOptions.map((type) => (
+                          <option key={type} value={type}>{urgencyTypeOptionLabel(type)}</option>
+                        ))}
+                      </select>
+                    </label>
+                    {displayedUrgencyType === 'vu' || displayedUrgencyType === 'd' ? (
+                      <input
+                        type="number"
+                        min="1"
+                        max="31"
+                        placeholder="Day (1-31)"
+                        key={`${order.id}-${order.urgency_target_date ?? 'unset'}`}
+                        defaultValue={order.urgency_target_date ? new Date(order.urgency_target_date).getUTCDate() : ''}
+                        onBlur={(e) => handleUrgencyDayCommit(order.id, displayedUrgencyType, e.target.value)}
+                        onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }}
+                        style={{ width: '5.5rem', fontSize: '0.85rem' }}
+                      />
+                    ) : null}
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.85rem' }}>
+                      Status
+                      <select
+                        value={order.confirmation_status}
+                        onChange={(e) => updateField(order.id, 'confirmation_status', e.target.value)}
+                        style={{ ...statusBadgeStyle(order.confirmation_status), border: 'none', borderRadius: '999px', padding: '0.25rem 0.6rem' }}
+                      >
+                        {confirmationStatusOptions.map((step) => (
+                          <option key={step} value={step}>{statusLabel(step)}</option>
+                        ))}
+                      </select>
+                    </label>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.85rem' }}>
+                      Delivery
+                      <select
+                        value={order.delivery_status}
+                        onChange={(e) => updateField(order.id, 'delivery_status', e.target.value)}
+                        style={{ ...statusBadgeStyle(order.delivery_status), border: 'none', borderRadius: '999px', padding: '0.25rem 0.6rem' }}
+                      >
+                        {deliveryOptions.map((step) => (
+                          <option key={step} value={step}>{statusLabel(step)}</option>
+                        ))}
+                      </select>
+                    </label>
+                    {savingIds.has(order.id) ? <span style={{ fontSize: '0.8rem', color: '#666' }}>Saving...</span> : null}
+                    {rowErrors[order.id] ? <span style={{ fontSize: '0.8rem', color: '#c62828' }}>{rowErrors[order.id]}</span> : null}
+                    {rowWarnings[order.id] ? <span style={{ fontSize: '0.8rem', color: '#ef6c00' }}>{rowWarnings[order.id]}</span> : null}
+                  </div>
+                )}
 
                 <div style={{ marginTop: '0.75rem', display: 'flex', gap: '1rem', alignItems: 'center', flexWrap: 'wrap' }}>
-                  <Link href={`/orders/${order.id}`} style={{ color: '#a83aa3', fontWeight: 600 }}>Open order →</Link>
+                  <Link href={`/orders/${order.id}`} className="order-open-link" style={{ color: '#a83aa3', fontWeight: 600 }}>Open order →</Link>
                   <button
                     type="button"
                     className="btn-plain"

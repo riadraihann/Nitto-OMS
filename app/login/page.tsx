@@ -32,7 +32,7 @@ function LoginForm() {
   };
 
   return (
-    <main style={{ maxWidth: 360, margin: '4rem auto', padding: '0 1rem' }}>
+    <div style={{ maxWidth: 360, margin: '0 auto' }}>
       <h1 style={{ marginBottom: '1.5rem' }}>Sign in</h1>
       <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
         <label style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
@@ -61,7 +61,7 @@ function LoginForm() {
           {submitting ? 'Signing in…' : 'Sign in'}
         </button>
       </form>
-    </main>
+    </div>
   );
 }
 

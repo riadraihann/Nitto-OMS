@@ -27,10 +27,10 @@ function OrderLink({ id, order_number, customer_name }: { id: number; order_numb
 export default async function AttentionNeededPage({ searchParams }: ReportPageProps) {
   if (!supabaseAdmin) {
     return (
-      <main style={{ maxWidth: 1100, margin: '2rem auto', padding: '0 1rem' }}>
+      <div style={{ maxWidth: 1100, margin: '0 auto' }}>
         <h1>Attention Needed</h1>
         <p>Supabase is not configured yet.</p>
-      </main>
+      </div>
     );
   }
 
@@ -47,29 +47,28 @@ export default async function AttentionNeededPage({ searchParams }: ReportPagePr
 
   if (errorMessage || !checks) {
     return (
-      <main style={{ maxWidth: 1100, margin: '2rem auto', padding: '0 1rem' }}>
+      <div style={{ maxWidth: 1100, margin: '0 auto' }}>
         <h1>Attention Needed</h1>
         <p>Unable to load: {errorMessage}</p>
-      </main>
+      </div>
     );
   }
 
   const totalCount = checks.subtotalMismatches.length + checks.staleStatus.length + checks.urgencyPassed.length + checks.duplicateGroups.length;
 
-  const sectionStyle: CSSProperties = { border: '1px solid #e5e7eb', borderRadius: '12px', padding: '1rem', marginBottom: '1rem' };
-  const rowStyle: CSSProperties = { padding: '0.5rem 0', borderBottom: '1px solid #f0f0f0', fontSize: '0.9rem' };
+  const rowStyle: CSSProperties = { padding: '0.5rem 0', borderBottom: '1px solid var(--card-border)', fontSize: '0.9rem' };
 
   return (
-    <main style={{ maxWidth: 1100, margin: '2rem auto', padding: '0 1rem' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+    <div style={{ maxWidth: 1100, margin: '0 auto' }}>
+      <div className="page-header">
         <div>
-          <h1 style={{ marginBottom: '0.25rem' }}>Attention Needed</h1>
-          <p style={{ margin: 0, color: '#666' }}>Daily data-integrity checks -- flagged, not auto-fixed. Recomputed live on every visit.</p>
+          <h1>Attention Needed <span style={{ color: '#666', fontWeight: 400, fontSize: '1.1rem' }}>({totalCount})</span></h1>
+          <p>Daily data-integrity checks -- flagged, not auto-fixed. Recomputed live on every visit.</p>
         </div>
         <Link href="/orders" className="nav-pill">← Back to orders</Link>
       </div>
 
-      <div style={{ borderLeft: '4px solid #0a2472', background: '#eaeef7', borderRadius: '8px', padding: '0.85rem 1rem', marginBottom: '1rem', fontWeight: 700, color: '#0a2472' }}>
+      <div style={{ borderLeft: '4px solid var(--navy)', background: 'var(--navy-tint)', borderRadius: '8px', padding: '0.85rem 1rem', marginBottom: 'var(--space-4)', fontWeight: 700, color: 'var(--navy)' }}>
         {totalCount === 0 ? 'Nothing flagged -- all clear.' : `${totalCount} item${totalCount === 1 ? '' : 's'} flagged across ${[
           checks.subtotalMismatches.length && 'subtotal mismatches',
           checks.staleStatus.length && 'stale statuses',
@@ -78,7 +77,7 @@ export default async function AttentionNeededPage({ searchParams }: ReportPagePr
         ].filter(Boolean).length} categories`}
       </div>
 
-      <section style={sectionStyle}>
+      <section className="card">
         <h2 style={{ marginTop: 0 }}>Bill amount doesn&apos;t match items ({checks.subtotalMismatches.length})</h2>
         <p style={{ color: '#666', fontSize: '0.85rem', marginTop: '-0.5rem' }}>Only compared when items carry real per-item pricing -- sheet-sourced orders without it are excluded, not flagged.</p>
         {checks.subtotalMismatches.length === 0 ? <p style={{ color: '#666' }}>None.</p> : (
@@ -94,7 +93,7 @@ export default async function AttentionNeededPage({ searchParams }: ReportPagePr
         )}
       </section>
 
-      <section style={sectionStyle}>
+      <section className="card">
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
           <h2 style={{ margin: 0 }}>No status change in {staleDays}+ days ({checks.staleStatus.length})</h2>
           <form action="/reports/attention-needed" method="get" style={{ display: 'flex', gap: '0.4rem', alignItems: 'center', fontSize: '0.85rem' }}>
@@ -121,7 +120,7 @@ export default async function AttentionNeededPage({ searchParams }: ReportPagePr
         )}
       </section>
 
-      <section style={sectionStyle}>
+      <section className="card">
         <h2 style={{ marginTop: 0 }}>VU/D date passed but still unresolved ({checks.urgencyPassed.length})</h2>
         {checks.urgencyPassed.length === 0 ? <p style={{ color: '#666' }}>None.</p> : (
           <div>
@@ -138,7 +137,7 @@ export default async function AttentionNeededPage({ searchParams }: ReportPagePr
         )}
       </section>
 
-      <section style={sectionStyle}>
+      <section className="card">
         <h2 style={{ marginTop: 0 }}>Possible duplicates ({checks.duplicateGroups.length})</h2>
         <p style={{ color: '#666', fontSize: '0.85rem' }}>Same phone, same calendar day, at least one shared product -- last 30 days only.</p>
         {checks.duplicateGroups.length === 0 ? <p style={{ color: '#666' }}>None.</p> : (
@@ -159,6 +158,6 @@ export default async function AttentionNeededPage({ searchParams }: ReportPagePr
           </div>
         )}
       </section>
-    </main>
+    </div>
   );
 }
