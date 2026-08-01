@@ -44,6 +44,7 @@
   --space-7: 48px;
 
   --sidebar-width: 248px;
+  --topbar-height: 56px;
 
   --font-body: var(--font-inter), system-ui, -apple-system, 'Segoe UI', sans-serif;
   --font-display: var(--font-display-font, var(--font-body));
@@ -226,18 +227,34 @@ label {
    the viewport top -- avoids the extra fixed-position stacking-context/z-index bookkeeping
    fixed would need, with the same visual result for a single-column page.
    --------------------------------------------------------------------------------------- */
+/* Top banner: full-width, sits above the sidebar (Shopify-admin style), holds the persistent
+   global search. Sticky at the very top of the page; the sidebar below is offset by its
+   height so the two stay stacked correctly rather than overlapping. */
+.app-topbar {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  height: var(--topbar-height);
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  padding: 0 var(--space-4);
+  background: #fff;
+  border-bottom: 1px solid var(--card-border);
+}
+
 .app-shell {
   display: flex;
   align-items: flex-start;
-  min-height: 100vh;
+  min-height: calc(100vh - var(--topbar-height));
 }
 
 .app-sidebar {
   width: var(--sidebar-width);
   flex-shrink: 0;
-  min-height: 100vh;
+  min-height: calc(100vh - var(--topbar-height));
   position: sticky;
-  top: 0;
+  top: var(--topbar-height);
   align-self: flex-start;
   background: var(--navy);
   color: #fff;
@@ -250,8 +267,144 @@ label {
   flex: 1;
   min-width: 0;
   background: var(--bg-page);
-  min-height: 100vh;
+  min-height: calc(100vh - var(--topbar-height));
   padding: var(--space-4) var(--space-5);
+}
+
+/* ---------------------------------------------------------------------------------------
+   Global search (top banner) -- see app/components/GlobalSearch.tsx. Debounced client-side,
+   so these styles only need to handle the resting/open/loading states, not per-keystroke churn.
+   --------------------------------------------------------------------------------------- */
+.global-search {
+  position: relative;
+  width: 100%;
+  max-width: 420px;
+}
+
+.global-search-input-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.global-search-icon {
+  position: absolute;
+  left: 10px;
+  color: var(--text-muted);
+  pointer-events: none;
+}
+
+.global-search-input {
+  width: 100%;
+  padding: 0.45rem 2.1rem;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg-page);
+  font-size: 0.9rem;
+}
+
+.global-search-input:focus {
+  background: #fff;
+}
+
+.global-search-spinner {
+  position: absolute;
+  right: 10px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid var(--card-border);
+  border-top-color: var(--navy);
+  animation: skeleton-spin 700ms linear infinite;
+}
+
+@keyframes skeleton-spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .global-search-spinner {
+    animation: none;
+  }
+}
+
+.global-search-dropdown {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  width: 100%;
+  min-width: 380px;
+  max-height: 70vh;
+  overflow-y: auto;
+  background: #fff;
+  border: 1px solid var(--card-border);
+  border-radius: var(--card-radius);
+  box-shadow: 0 8px 24px rgba(16, 24, 40, 0.12);
+  z-index: 40;
+  padding: var(--space-2);
+}
+
+.global-search-empty {
+  padding: var(--space-3);
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
+.global-search-result {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  padding: 0.55rem 0.7rem;
+  border-radius: 8px;
+  font: inherit;
+  cursor: pointer;
+}
+
+.global-search-result:hover,
+.global-search-result.active {
+  background: var(--navy-tint);
+}
+
+/* override the shared button reset (font-size/border/background come from `button` in
+   globals.css) -- this is a plain result row, not a call-to-action */
+.global-search-result:not(:disabled):active {
+  transform: none;
+}
+
+.global-search-result-main {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.global-search-result-order {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+.global-search-result-name {
+  font-weight: 700;
+  font-size: 0.95rem;
+}
+
+.global-search-result-sub {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+  margin-top: 0.2rem;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.global-search-result-match {
+  margin-top: 0.25rem;
+  font-size: 0.78rem;
+  color: var(--orchid-text);
 }
 
 .sidebar-logo-link {
