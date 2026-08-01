@@ -613,6 +613,73 @@ label {
 }
 
 /* ---------------------------------------------------------------------------------------
+   Compact card grid -- History, Cancelled, and Archived (resolved/inactive orders) use this
+   instead of the detailed editable .order-row Orders/Call Pending/Needs Review keep. No
+   urgency-based coloring here at all (deliberately -- urgency is a live-workflow concern).
+   Background-color/border-color transitions only, same cheap-to-paint-at-scale rule as
+   .order-row, since this can render just as many cards as that renders rows.
+   --------------------------------------------------------------------------------------- */
+.order-card {
+  background: #fff;
+  border: 1px solid var(--card-border);
+  border-radius: 8px;
+  padding: var(--space-3);
+  cursor: pointer;
+  transition: border-color 120ms ease, background-color 120ms ease;
+}
+
+.order-card:hover {
+  border-color: var(--navy);
+  background-color: var(--navy-tint);
+}
+
+.order-card:focus-visible {
+  outline: 2px solid var(--orchid);
+  outline-offset: 2px;
+}
+
+/* History keeps its muted/grayscale accent here too, instead of navy */
+.history-page .order-card:hover {
+  border-color: var(--history-accent);
+  background-color: var(--history-accent-tint);
+}
+
+.order-card-top {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.order-card-name {
+  font-weight: 700;
+  font-size: 0.95rem;
+}
+
+.order-card-phone {
+  display: block;
+  margin-top: 0.35rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.history-page .order-card-phone {
+  color: var(--history-text);
+}
+
+.order-card-total {
+  margin-top: 0.5rem;
+  font-weight: 700;
+  font-size: 0.9rem;
+}
+
+.order-card-items {
+  margin-top: 0.3rem;
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  word-break: break-word;
+}
+
+/* ---------------------------------------------------------------------------------------
    Route-transition loading skeleton (see app/loading.tsx and the per-section loading.tsx
    files) -- Next.js shows this instantly, client-side, the moment a link to a Server
    Component page is clicked, while that page's data fetch is still in flight. Fixes the

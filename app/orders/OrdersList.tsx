@@ -1,6 +1,7 @@
 "use client";
 
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { statusBadgeStyle, statusLabel, confirmationStatusOptions, deliveryOptions, urgencyTypeOptions, urgencyTypeOptionLabel, urgencyLabel, telHref, CALL_PENDING_STAGES, isHistoryDelivery } from '@/lib/theme';
 import { NEEDS_REVIEW_REASON_LABELS } from '@/lib/orderValidation.mjs';
@@ -55,6 +56,12 @@ type OrdersListProps = {
 };
 
 export default function OrdersList({ orders: initialOrders, view, bucket, totalCount: initialTotalCount, page, pageSize, prevHref, nextHref, pageSizeHrefs, itemLabel }: OrdersListProps) {
+  const router = useRouter();
+  // History, Cancelled, and Archived are resolved/inactive orders -- a compact card grid
+  // (customer, phone, total, item summary only) instead of the detailed editable row Orders/
+  // Call Pending/Needs Review use. Also drops urgency-based row coloring entirely, since
+  // urgency is a live-workflow concern that doesn't apply to orders already done.
+  const compact = bucket === 'history' || view === 'cancelled' || view === 'archived';
   const [orders, setOrders] = useState(initialOrders);
   // Local copy so instant client-side row removals (archiving, a delivery_status edit that
   // crosses the active/history boundary, a Call Pending row getting confirmed) can decrement
@@ -418,11 +425,40 @@ export default function OrdersList({ orders: initialOrders, view, bucket, totalC
         {syncError ? <span style={{ color: '#c62828', fontSize: '0.9rem' }}>{syncError}</span> : null}
       </div>
 
-      <div style={{ display: 'grid', gap: '0.75rem' }}>
+      <div style={compact ? { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(230px, 1fr))', gap: 'var(--space-3)' } : { display: 'grid', gap: '0.75rem' }}>
         {orders.map((order) => {
           const itemSummary = (order.order_items ?? []).map((item) => `${item.quantity} × ${item.sku || item.product_name}`).join(', ');
           const computedSubtotal = (order.order_items ?? []).reduce((sum, item) => sum + item.quantity * item.unit_price, 0);
           const subtotal = order.total_amount ?? computedSubtotal;
+
+          if (compact) {
+            return (
+              <div
+                key={order.id}
+                className="order-card"
+                role="button"
+                tabIndex={0}
+                onClick={() => router.push(`/orders/${order.id}`)}
+                onKeyDown={(e) => { if (e.key === 'Enter') router.push(`/orders/${order.id}`); }}
+              >
+                <div className="order-card-top">
+                  <input
+                    type="checkbox"
+                    checked={selected.has(order.id)}
+                    onChange={() => toggleOne(order.id)}
+                    onClick={(e) => e.stopPropagation()}
+                  />
+                  <span className="order-card-name">{order.customer_name}</span>
+                </div>
+                <a href={telHref(order.phone)} className="order-card-phone" onClick={(e) => e.stopPropagation()}>
+                  {order.phone}
+                </a>
+                <div className="order-card-total">৳{subtotal.toFixed(2)}</div>
+                <div className="order-card-items">{itemSummary || 'No items'}</div>
+              </div>
+            );
+          }
+
           const rowClassName = order.urgency_type === 'urgent' || order.urgency_type === 'vu'
             ? 'order-row order-row--urgent'
             : order.urgency_type === 'hold'
@@ -507,17 +543,9 @@ export default function OrdersList({ orders: initialOrders, view, bucket, totalC
                   }) : null}
                 </div>
 
-                {bucket === 'history' ? (
-                  // History is read-only for these three fields (item 8 of the redesign brief)
-                  // -- these are resolved orders, so no selects here; open the order's detail
-                  // view to review or correct past status if genuinely needed.
-                  <div style={{ marginTop: '0.75rem', display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
-                    <span className="status-pill-static" style={statusBadgeStyle(order.urgency_type)}>{urgencyTypeOptionLabel(order.urgency_type)}</span>
-                    <span className="status-pill-static" style={statusBadgeStyle(order.confirmation_status)}>{statusLabel(order.confirmation_status)}</span>
-                    <span className="status-pill-static" style={statusBadgeStyle(order.delivery_status)}>{statusLabel(order.delivery_status)}</span>
-                  </div>
-                ) : (
-                  <div style={{ marginTop: '0.75rem', display: 'flex', gap: '0.75rem', flexWrap: 'wrap', alignItems: 'center' }}>
+                {/* bucket is always 'active' here -- History always takes the compact-card
+                    branch above and returns before reaching this point. */}
+                <div style={{ marginTop: '0.75rem', display: 'flex', gap: '0.75rem', flexWrap: 'wrap', alignItems: 'center' }}>
                     <label style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.85rem' }}>
                       Urgency
                       <select
@@ -571,7 +599,6 @@ export default function OrdersList({ orders: initialOrders, view, bucket, totalC
                     {rowErrors[order.id] ? <span style={{ fontSize: '0.8rem', color: '#c62828' }}>{rowErrors[order.id]}</span> : null}
                     {rowWarnings[order.id] ? <span style={{ fontSize: '0.8rem', color: '#ef6c00' }}>{rowWarnings[order.id]}</span> : null}
                   </div>
-                )}
 
                 <div style={{ marginTop: '0.75rem', display: 'flex', gap: '1rem', alignItems: 'center', flexWrap: 'wrap' }}>
                   <Link href={`/orders/${order.id}`} className="order-open-link" style={{ color: '#a83aa3', fontWeight: 600 }}>Open order →</Link>
