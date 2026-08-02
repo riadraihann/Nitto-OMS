@@ -157,9 +157,12 @@ export default function OrdersList({ orders: initialOrders, view, bucket, totalC
     // Cancelling a shopify-sourced order here doesn't touch the order on Shopify itself unless a
     // moderator explicitly opts in -- ask every time, since silently leaving Shopify unchanged
     // (or silently changing it) are both surprising defaults for something a customer sees.
+    // Whether that ends up cancelling or deleting the Shopify order is decided server-side
+    // (fulfilled+paid orders -- this store's normal case -- can't be cancelled on Shopify, only
+    // deleted), so the prompt doesn't promise one specific action.
     const cancelOnShopify =
       field === 'confirmation_status' && value === 'cancelled' && order?.order_source === 'shopify'
-        ? window.confirm('Also cancel this order on Shopify?')
+        ? window.confirm('Also remove this order from Shopify? (Cancels it there if possible, otherwise deletes it.)')
         : false;
 
     // moving to a terminal confirmation status wipes contact_attempts server-side (see

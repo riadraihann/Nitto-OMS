@@ -48,7 +48,7 @@ async function findShopifyOrderIdByName(orderName: string): Promise<{ ok: true; 
   }
 }
 
-async function cancelShopifyOrderById(shopifyOrderId: string): Promise<{ ok: true } | { ok: false; error: string }> {
+async function cancelShopifyOrderById(shopifyOrderId: string): Promise<{ ok: true } | { ok: false; status: number | null; error: string }> {
   try {
     // Conservative defaults: a generic reason (Shopify requires one), and no customer-facing
     // cancellation email -- a moderator cancelling here shouldn't silently trigger customer
@@ -59,7 +59,26 @@ async function cancelShopifyOrderById(shopifyOrderId: string): Promise<{ ok: tru
     });
     if (!res.ok) {
       const text = await res.text().catch(() => '');
-      return { ok: false, error: `Shopify cancel failed (${res.status}): ${text.slice(0, 300)}` };
+      return { ok: false, status: res.status, error: `Shopify cancel failed (${res.status}): ${text.slice(0, 300)}` };
+    }
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, status: null, error: `Couldn't reach Shopify: ${error instanceof Error ? error.message : 'unknown error'}` };
+  }
+}
+
+// Fulfilled-and-paid orders (this store's normal path, per every order eventually being
+// fulfilled with payment confirmed) can no longer be cancelled on Shopify -- Shopify's admin UI
+// only offers "Delete" for those, not "Cancel". Shopify's own signal for "cancel isn't a valid
+// action for this order" is a 422 response, which is what triggers this fallback in
+// attemptShopifyCancel below -- other failures (404/401/403/network) mean delete would fail
+// identically, so they're surfaced as-is instead of wasting a second call.
+async function deleteShopifyOrderById(shopifyOrderId: string): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    const res = await shopifyFetch(`/orders/${shopifyOrderId}.json`, { method: 'DELETE' });
+    if (!res.ok) {
+      const text = await res.text().catch(() => '');
+      return { ok: false, error: `Shopify delete failed (${res.status}): ${text.slice(0, 300)}` };
     }
     return { ok: true };
   } catch (error) {
@@ -75,29 +94,28 @@ type OrderForCancel = {
 };
 
 // Called right after an order has already been cancelled app-side (see app/api/orders/route.ts) --
-// resolves+caches the Shopify order id if not already known, then cancels it on Shopify.
-// Always returns a result rather than throwing: a Shopify-side failure must never be treated as
-// the app-side cancellation failing, it's already committed by the time this runs.
+// resolves+caches the Shopify order id if not already known, then cancels (or, if the order is
+// past the point Shopify allows cancelling -- fulfilled and paid, this store's normal path --
+// deletes) it on Shopify. Always returns a result rather than throwing: a Shopify-side failure
+// must never be treated as the app-side cancellation failing, it's already committed by the time
+// this runs.
 export async function cancelOnShopify(
   supabase: any,
   order: OrderForCancel,
   actorName: string | null,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const result = await attemptShopifyCancel(supabase, order);
-  await logOrderHistory(
-    supabase,
-    order.id,
-    [{ field: 'shopify_cancel', old_value: null, new_value: result.ok ? `cancelled on Shopify (order ${result.shopifyOrderId})` : `failed: ${result.error}` }],
-    'moderator',
-    actorName,
-  );
-  return result;
+  const summary = result.ok
+    ? `${result.action} on Shopify (order ${result.shopifyOrderId})`
+    : `failed: ${result.error}`;
+  await logOrderHistory(supabase, order.id, [{ field: 'shopify_cancel', old_value: null, new_value: summary }], 'moderator', actorName);
+  return result.ok ? { ok: true } : result;
 }
 
 async function attemptShopifyCancel(
   supabase: any,
   order: OrderForCancel,
-): Promise<{ ok: true; shopifyOrderId: string } | { ok: false; error: string }> {
+): Promise<{ ok: true; shopifyOrderId: string; action: 'cancelled' | 'deleted' } | { ok: false; error: string }> {
   if (!isConfigured()) {
     return { ok: false, error: 'Shopify integration is not configured (missing SHOPIFY_STORE_DOMAIN/SHOPIFY_ADMIN_API_TOKEN)' };
   }
@@ -116,6 +134,21 @@ async function attemptShopifyCancel(
     await supabase.from('orders').update({ shopify_order_id: shopifyOrderId }).eq('id', order.id);
   }
 
-  const result = await cancelShopifyOrderById(shopifyOrderId);
-  return result.ok ? { ok: true, shopifyOrderId } : result;
+  const cancelResult = await cancelShopifyOrderById(shopifyOrderId);
+  if (cancelResult.ok) {
+    return { ok: true, shopifyOrderId, action: 'cancelled' };
+  }
+
+  // 422 is Shopify's signal that cancel isn't a valid action for this order's current state (e.g.
+  // already fulfilled + paid) -- fall back to delete. Any other failure (404/401/403/network)
+  // would fail identically on delete, so surface the original cancel error instead of masking it.
+  if (cancelResult.status !== 422) {
+    return { ok: false, error: cancelResult.error };
+  }
+
+  const deleteResult = await deleteShopifyOrderById(shopifyOrderId);
+  if (!deleteResult.ok) {
+    return { ok: false, error: `cancel not allowed (${cancelResult.error}); delete also failed: ${deleteResult.error}` };
+  }
+  return { ok: true, shopifyOrderId, action: 'deleted' };
 }
