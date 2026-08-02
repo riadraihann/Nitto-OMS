@@ -8,6 +8,7 @@ import { diffOrderFields, logOrderHistory } from '@/lib/orderHistory.mjs';
 import { computeNeedsReview, validateFeedbackFields } from '@/lib/orderValidation.mjs';
 import { isTerminalConfirmationStatus } from '@/lib/contactAttempts.mjs';
 import { getVisibleNeedsReviewReasons } from '@/lib/needsReviewFlags';
+import { cancelOnShopify } from '@/lib/shopifyAdmin';
 
 // Fields whose values feed computeNeedsReview -- a PATCH only needs to recompute needs_review
 // when one of these actually changed (item count can't change via this endpoint at all, so it's
@@ -133,6 +134,10 @@ export async function PATCH(request: Request) {
 
     const rawUpdatePayload = { ...payload };
     delete rawUpdatePayload.id;
+    // Not a real order column -- pulled out here so it never reaches normalizeUrgencyFields/the
+    // update() call below, and handled separately after the app-side cancellation has committed.
+    const cancelOnShopifyRequested = Boolean(rawUpdatePayload.cancel_on_shopify);
+    delete rawUpdatePayload.cancel_on_shopify;
 
     const normalized = normalizeUrgencyFields(rawUpdatePayload);
     if (!normalized.ok) {
@@ -154,6 +159,21 @@ export async function PATCH(request: Request) {
       ]);
       const merged = { ...currentOrder, ...normalized.payload };
       Object.assign(normalized.payload, computeNeedsReview(merged as { phone?: string; total_amount?: number }, currentItems ?? []));
+    }
+
+    // First transition to 'sent_to_courier'/'delivered' stamps the real dispatch date -- see
+    // supabase/add_dispatch_dates.sql. Only set once: re-selecting the same status later (e.g.
+    // after a moderator corrects a mistaken delivery_status back and forth) must not overwrite
+    // the original event time.
+    if ('delivery_status' in normalized.payload) {
+      const { data: currentDates } = await supabaseAdmin.from('orders').select('courier_handoff_date, delivered_date').eq('id', id).single();
+      const nowIso = new Date().toISOString();
+      if (normalized.payload.delivery_status === 'sent_to_courier' && !currentDates?.courier_handoff_date) {
+        normalized.payload.courier_handoff_date = nowIso;
+      }
+      if (normalized.payload.delivery_status === 'delivered' && !currentDates?.delivered_date) {
+        normalized.payload.delivered_date = nowIso;
+      }
     }
 
     const updatedFields = Object.keys(normalized.payload);
@@ -202,7 +222,17 @@ export async function PATCH(request: Request) {
       }
     }
 
-    return NextResponse.json({ ok: true, data, ...(sheetSyncWarning ? { sheetSyncWarning } : {}) });
+    // Only attempted once the app-side cancellation above has already succeeded -- a Shopify-side
+    // failure is surfaced as a warning, never as a reason to fail this request or roll anything back.
+    let shopifyWarning: string | undefined;
+    if (cancelOnShopifyRequested && normalized.payload.confirmation_status === 'cancelled' && data.order_source === 'shopify') {
+      const shopifyResult = await cancelOnShopify(supabaseAdmin, data, actor?.name ?? null);
+      if (!shopifyResult.ok) {
+        shopifyWarning = `Cancelled here, but Shopify wasn't updated: ${shopifyResult.error}`;
+      }
+    }
+
+    return NextResponse.json({ ok: true, data, ...(sheetSyncWarning ? { sheetSyncWarning } : {}), ...(shopifyWarning ? { shopifyWarning } : {}) });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error';
     return NextResponse.json({ ok: false, error: message }, { status: 500 });

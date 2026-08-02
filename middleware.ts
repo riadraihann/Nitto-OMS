@@ -26,6 +26,11 @@ export async function middleware(request: NextRequest) {
         cookiesToSet.forEach(({ name, value, options }) => response.cookies.set(name, value, options));
       },
     },
+    // Same reasoning as lib/supabase.ts's noStoreFetch -- every request must re-check the
+    // session fresh, never served from Next's fetch cache.
+    global: {
+      fetch: (input: RequestInfo | URL, init?: RequestInit) => fetch(input, { ...init, cache: 'no-store' }),
+    },
   });
 
   const {

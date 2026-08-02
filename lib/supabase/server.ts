@@ -29,6 +29,11 @@ export function createServerSupabaseClient() {
         }
       },
     },
+    // Same reasoning as lib/supabase.ts's noStoreFetch -- this client's auth check needs to be
+    // read fresh every request, not served from Next's fetch cache.
+    global: {
+      fetch: (input: RequestInfo | URL, init?: RequestInit) => fetch(input, { ...init, cache: 'no-store' }),
+    },
   });
 }
 

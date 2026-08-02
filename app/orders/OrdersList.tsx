@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { Fragment, useEffect, useState } from 'react';
 import { statusBadgeStyle, statusLabel, confirmationStatusOptions, deliveryOptions, urgencyTypeOptions, urgencyTypeOptionLabel, urgencyLabel, telHref, CALL_PENDING_STAGES, isHistoryDelivery } from '@/lib/theme';
 import { NEEDS_REVIEW_REASON_LABELS } from '@/lib/orderValidation.mjs';
 import { ATTEMPT_TYPES, ATTEMPT_MAX, ATTEMPT_TYPE_LABELS, isTerminalConfirmationStatus, formatAttemptsForDisplay } from '@/lib/contactAttempts.mjs';
@@ -26,6 +26,7 @@ type ContactAttempt = {
 type OrderRow = {
   id: number;
   order_number: string | null;
+  order_source: string;
   customer_name: string;
   phone: string;
   address: string;
@@ -41,6 +42,12 @@ type OrderRow = {
   visible_needs_review_reasons: string[];
   order_items: OrderItem[];
   contact_attempts: ContactAttempt[];
+  // Set server-side (History only, see app/history/page.tsx) to the group label this order
+  // should be preceded by -- e.g. "Monday, August 3, 2026" for the first order under that
+  // dispatch date. A plain data field, not a callback prop, since Server Components can't pass
+  // functions to a "use client" component; the page already knows the full sorted order, so it
+  // computes where each group boundary falls instead of OrdersList re-deriving it.
+  groupHeader?: string | null;
 };
 
 // Minimal inline icon (feather-icons-style path) for the dense table's Open action -- no icon
@@ -144,7 +151,17 @@ export default function OrdersList({ orders: initialOrders, view, bucket, totalC
   };
 
   const updateField = async (orderId: number, field: 'confirmation_status' | 'delivery_status', value: string) => {
-    const previous = orders.find((o) => o.id === orderId)?.[field];
+    const order = orders.find((o) => o.id === orderId);
+    const previous = order?.[field];
+
+    // Cancelling a shopify-sourced order here doesn't touch the order on Shopify itself unless a
+    // moderator explicitly opts in -- ask every time, since silently leaving Shopify unchanged
+    // (or silently changing it) are both surprising defaults for something a customer sees.
+    const cancelOnShopify =
+      field === 'confirmation_status' && value === 'cancelled' && order?.order_source === 'shopify'
+        ? window.confirm('Also cancel this order on Shopify?')
+        : false;
+
     // moving to a terminal confirmation status wipes contact_attempts server-side (see
     // app/api/orders/route.ts) -- mirror that locally so the badge clears immediately
     const wipesAttempts = field === 'confirmation_status' && isTerminalConfirmationStatus(value);
@@ -157,7 +174,7 @@ export default function OrdersList({ orders: initialOrders, view, bucket, totalC
       const response = await fetch(`/api/orders?id=${orderId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: orderId, [field]: value }),
+        body: JSON.stringify({ id: orderId, [field]: value, ...(cancelOnShopify ? { cancel_on_shopify: true } : {}) }),
       });
       const result = await response.json();
 
@@ -165,8 +182,9 @@ export default function OrdersList({ orders: initialOrders, view, bucket, totalC
         setOrders((prev) => prev.map((o) => (o.id === orderId ? { ...o, [field]: previous ?? o[field] } : o)));
         setRowErrors((prev) => ({ ...prev, [orderId]: result.error || 'Unable to save' }));
       } else {
-        if (result.sheetSyncWarning) {
-          setRowWarnings((prev) => ({ ...prev, [orderId]: result.sheetSyncWarning }));
+        const warnings = [result.sheetSyncWarning, result.shopifyWarning].filter(Boolean).join(' ');
+        if (warnings) {
+          setRowWarnings((prev) => ({ ...prev, [orderId]: warnings }));
         }
 
         // Call Pending only ever shows 'pending' orders -- once a row is marked to any terminal
@@ -625,29 +643,35 @@ export default function OrdersList({ orders: initialOrders, view, bucket, totalC
 
           if (compact) {
             return (
-              <div
-                key={order.id}
-                className="order-card"
-                role="button"
-                tabIndex={0}
-                onClick={() => router.push(`/orders/${order.id}`)}
-                onKeyDown={(e) => { if (e.key === 'Enter') router.push(`/orders/${order.id}`); }}
-              >
-                <div className="order-card-top">
-                  <input
-                    type="checkbox"
-                    checked={selected.has(order.id)}
-                    onChange={() => toggleOne(order.id)}
-                    onClick={(e) => e.stopPropagation()}
-                  />
-                  <span className="order-card-name">{order.customer_name}</span>
+              <Fragment key={order.id}>
+                {order.groupHeader ? (
+                  <div className="order-card-group-header">
+                    {order.groupHeader}
+                  </div>
+                ) : null}
+                <div
+                  className="order-card"
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => router.push(`/orders/${order.id}`)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') router.push(`/orders/${order.id}`); }}
+                >
+                  <div className="order-card-top">
+                    <input
+                      type="checkbox"
+                      checked={selected.has(order.id)}
+                      onChange={() => toggleOne(order.id)}
+                      onClick={(e) => e.stopPropagation()}
+                    />
+                    <span className="order-card-name">{order.customer_name}</span>
+                  </div>
+                  <a href={telHref(order.phone)} className="order-card-phone" onClick={(e) => e.stopPropagation()}>
+                    {order.phone}
+                  </a>
+                  <div className="order-card-total">৳{subtotal.toFixed(2)}</div>
+                  <div className="order-card-items">{itemSummary || 'No items'}</div>
                 </div>
-                <a href={telHref(order.phone)} className="order-card-phone" onClick={(e) => e.stopPropagation()}>
-                  {order.phone}
-                </a>
-                <div className="order-card-total">৳{subtotal.toFixed(2)}</div>
-                <div className="order-card-items">{itemSummary || 'No items'}</div>
-              </div>
+              </Fragment>
             );
           }
 

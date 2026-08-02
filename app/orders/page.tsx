@@ -26,6 +26,7 @@ type ContactAttempt = {
 type OrderRow = {
   id: number;
   order_number: string | null;
+  order_source: string;
   customer_name: string;
   phone: string;
   address: string;
@@ -77,7 +78,7 @@ export default async function OrdersPage({ searchParams }: OrdersPageProps) {
 
   let query = supabaseAdmin
     .from('orders')
-    .select('id, order_number, customer_name, phone, address, urgency_type, urgency_target_date, confirmation_status, delivery_status, created_at, total_amount, archived_at, needs_review, needs_review_reasons, order_items(sku, product_name, quantity, unit_price), contact_attempts(type, count, first_logged_at)', { count: 'exact' });
+    .select('id, order_number, order_source, customer_name, phone, address, urgency_type, urgency_target_date, confirmation_status, delivery_status, created_at, total_amount, archived_at, needs_review, needs_review_reasons, order_items(sku, product_name, quantity, unit_price), contact_attempts(type, count, first_logged_at)', { count: 'exact' });
 
   // /orders is the active working queue -- shipped orders (sent to courier or delivered) live
   // on /history instead, and archived orders live under Settings -> Archived. This applies to

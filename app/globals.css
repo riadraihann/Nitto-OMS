@@ -869,6 +869,22 @@ label {
   word-break: break-word;
 }
 
+/* History grouped by dispatch date (app/history/page.tsx) -- spans the full card-grid width so
+   it reads as a section divider, not another card. */
+.order-card-group-header {
+  grid-column: 1 / -1;
+  margin-top: var(--space-3);
+  padding-bottom: var(--space-1);
+  border-bottom: 1px solid var(--card-border);
+  font-weight: 700;
+  font-size: 0.95rem;
+  color: var(--history-text);
+}
+
+.order-card-group-header:first-child {
+  margin-top: 0;
+}
+
 /* ---------------------------------------------------------------------------------------
    Route-transition loading skeleton (see app/loading.tsx and the per-section loading.tsx
    files) -- Next.js shows this instantly, client-side, the moment a link to a Server

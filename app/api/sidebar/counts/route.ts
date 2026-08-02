@@ -6,6 +6,12 @@ import { HISTORY_DELIVERY_STATUSES, CALL_PENDING_STAGES } from '@/lib/theme';
 
 const DEFAULT_STALE_DAYS = 3;
 
+// Route Handlers with no dynamic API usage (cookies/headers) default to Next's static cache --
+// unlike every page.tsx in this app, which all explicitly opt out. Without this, Next serves the
+// *first* response forever (verified: this route was still returning a Call Pending count of 42
+// long after the real number had dropped to 11), which is obviously wrong for a live count.
+export const dynamic = 'force-dynamic';
+
 // Backs every count badge in the sidebar (app/components/Sidebar.tsx). Each query here mirrors
 // the base filter its corresponding page applies with no extra query params -- e.g. the "Orders"
 // count matches exactly what GET /orders (no ?view=) renders -- so the sidebar number never
